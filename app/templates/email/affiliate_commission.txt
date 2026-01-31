@@ -1,0 +1,33 @@
+{% extends "base.txt" %}
+
+{% block content %}
+YOU EARNED A COMMISSION!
+
+Hi {{ name }},
+
+Great news! One of your referrals just made a payment, and you've earned a commission.
+
+COMMISSION EARNED: +${{ commission_amount }}
+({{ commission_rate }}% of ${{ original_amount }})
+
+COMMISSION DETAILS
+------------------
+Referral: {{ referral_email }}
+Commission Type: {{ commission_type | title }}
+Date: {{ commission_date }}
+
+EARNINGS SUMMARY
+Pending Earnings: ${{ pending_earnings }}
+Total Earnings: ${{ total_earnings }}
+
+View Affiliate Dashboard: https://stackalpha.xyz/affiliate
+
+---
+
+Keep sharing your referral link to earn more commissions. You earn {{ initial_commission_rate }}% on initial subscriptions and {{ renewal_commission_rate }}% on renewals!
+
+Your referral link: https://stackalpha.xyz/ref/{{ referral_code }}
+
+Best regards,
+The StackAlpha Team
+{% endblock %}

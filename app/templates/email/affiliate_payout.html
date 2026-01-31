@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Payout {% if status == 'completed' %}Processed{% elif status == 'failed' %}Failed{% else %}{{ status | title }}{% endif %}</h1>
+
+<p class="lead">Hi {{ name }},</p>
+
+{% if status == 'completed' %}
+<p>Your affiliate payout has been successfully processed and sent to your wallet.</p>
+{% elif status == 'failed' %}
+<p>Unfortunately, we encountered an issue processing your payout. Please check your payout settings and try again.</p>
+{% elif status == 'processing' %}
+<p>Your payout request is being processed. You'll receive another notification once it's complete.</p>
+{% endif %}
+
+<div class="info-box {% if status == 'completed' %}success{% elif status == 'failed' %}danger{% else %}info{% endif %}">
+    <div class="info-box-title">Payout Details</div>
+    <div style="margin-top: 12px;">
+        <table style="width: 100%;">
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Amount:</td>
+                <td style="padding: 8px 0; font-weight: 700; color: #111827; text-align: right; font-size: 20px;">${{ amount }} {{ currency }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Status:</td>
+                <td style="padding: 8px 0; font-weight: 600; text-align: right; color: {% if status == 'completed' %}#10b981{% elif status == 'failed' %}#ef4444{% else %}#6366f1{% endif %};">{{ status | title }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Wallet Address:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right; font-family: monospace; font-size: 12px;">{{ payout_address[:10] }}...{{ payout_address[-8:] }}</td>
+            </tr>
+            {% if transaction_hash %}
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Transaction:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #6366f1; text-align: right; font-family: monospace; font-size: 12px;">{{ transaction_hash[:10] }}...{{ transaction_hash[-8:] }}</td>
+            </tr>
+            {% endif %}
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Date:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">{{ payout_date }}</td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+{% if status == 'failed' and error_message %}
+<div class="info-box danger">
+    <div class="info-box-title">Error Details</div>
+    <p style="margin: 8px 0 0; color: #991b1b;">{{ error_message }}</p>
+</div>
+{% endif %}
+
+<div class="button-container">
+    <a href="https://stackalpha.xyz/affiliate/payouts" class="button">View Payout History</a>
+</div>
+
+<div class="divider"></div>
+
+{% if status == 'completed' %}
+<p>Thank you for being a valued affiliate partner. Keep referring and earning!</p>
+{% elif status == 'failed' %}
+<p>If you need assistance, please contact our support team at <a href="mailto:tech@stackalpha.xyz">tech@stackalpha.xyz</a>.</p>
+{% endif %}
+
+<p>Best regards,<br><strong>The StackAlpha Team</strong></p>
+{% endblock %}

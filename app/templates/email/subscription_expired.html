@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Your Subscription Has Expired</h1>
+
+<p class="lead">Hi {{ name }},</p>
+
+<p>Your StackAlpha subscription has expired. Your account is now in a grace period, and premium features have been temporarily suspended.</p>
+
+<div class="info-box danger">
+    <div class="info-box-title">Subscription Expired</div>
+    <div style="margin-top: 12px;">
+        <table style="width: 100%;">
+            <tr>
+                <td style="padding: 8px 0; color: #991b1b;">Status:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #991b1b; text-align: right;">Expired</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #991b1b;">Grace Period Ends:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #991b1b; text-align: right;">{{ grace_period_ends }}</td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<p><strong>What this means:</strong></p>
+
+<ul>
+    <li>AI trading signals are no longer being generated for your account</li>
+    <li>Automated trade execution has been paused</li>
+    <li>Your open positions are not being monitored</li>
+    <li>Telegram notifications have been suspended</li>
+</ul>
+
+<div class="button-container">
+    <a href="https://stackalpha.xyz/subscription" class="button button-danger">Reactivate Now</a>
+</div>
+
+<div class="divider"></div>
+
+<p>We'd hate to see you go! If you experienced any issues or have feedback, please let us know at <a href="mailto:tech@stackalpha.xyz">tech@stackalpha.xyz</a>.</p>
+
+<p>If you have any open positions on Hyperliquid, we recommend manually reviewing and managing them.</p>
+
+<p>Best regards,<br><strong>The StackAlpha Team</strong></p>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "base.txt" %}
+
+{% block content %}
+TRADE CLOSED{% if close_reason == 'tp_hit' %} - TAKE PROFIT HIT!{% elif close_reason == 'sl_hit' %} - STOP LOSS HIT{% endif %}
+
+Hi {{ name }},
+
+{% if close_reason == 'tp_hit' %}
+Congratulations! Your trade hit the take profit target and has been closed with a profit.
+{% elif close_reason == 'sl_hit' %}
+Your trade hit the stop loss and has been closed to protect your capital.
+{% elif close_reason == 'manual' %}
+Your trade has been manually closed.
+{% elif close_reason == 'liquidation' %}
+Your trade has been liquidated due to margin requirements.
+{% else %}
+Your trade has been closed.
+{% endif %}
+
+TRADE SUMMARY
+-------------
+Symbol: {{ symbol }}
+Direction: {{ direction | upper }}
+Close Reason: {{ close_reason | replace('_', ' ') | title }}
+
+Entry Price: ${{ entry_price }}
+Exit Price: ${{ exit_price }}
+
+REALIZED P&L
+{% if pnl >= 0 %}+{% endif %}${{ pnl }} ({% if pnl_percent >= 0 %}+{% endif %}{{ pnl_percent }}%)
+
+TRADE STATISTICS
+Position Size: ${{ position_size_usd }}
+Leverage: {{ leverage }}x
+Fees Paid: ${{ fees_paid }}
+Duration: {{ duration }}
+
+View Trade Details: https://stackalpha.xyz/trades/{{ trade_id }}
+
+---
+
+View your complete trading history and performance analytics in your dashboard.
+
+Happy trading,
+The StackAlpha Team
+{% endblock %}

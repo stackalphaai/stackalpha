@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Wallet Connected Successfully</h1>
+
+<p class="lead">Hi {{ name }},</p>
+
+<p>Your trading wallet has been successfully connected to your StackAlpha account. You're now ready to start automated trading!</p>
+
+<div class="info-box success">
+    <div class="info-box-title">Wallet Details</div>
+    <div style="margin-top: 12px;">
+        <table style="width: 100%;">
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Wallet Address:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right; font-family: monospace; font-size: 13px;">{{ wallet_address[:10] }}...{{ wallet_address[-8:] }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Network:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">Hyperliquid</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Status:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #10b981; text-align: right;">Active</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Connected At:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">{{ connected_at }}</td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+{% if trading_enabled %}
+<div class="info-box info">
+    <div class="info-box-title">Auto-Trading Enabled</div>
+    <p style="margin: 8px 0 0; color: #1e40af;">Automated trading is now active. AI signals will be executed automatically based on your risk settings.</p>
+</div>
+{% endif %}
+
+<p><strong>What happens next:</strong></p>
+
+<ul class="feature-list">
+    <li>AI monitors markets and generates trading signals</li>
+    <li>Signals are automatically executed on your Hyperliquid account</li>
+    <li>Positions are managed with smart take-profit and stop-loss levels</li>
+    <li>You receive real-time notifications on trades</li>
+</ul>
+
+<div class="button-container">
+    <a href="https://stackalpha.xyz/settings/wallet" class="button">Manage Wallet Settings</a>
+</div>
+
+<div class="divider"></div>
+
+<div class="info-box warning">
+    <div class="info-box-title">Security Reminder</div>
+    <p style="margin: 8px 0 0; color: #92400e;">If you didn't connect this wallet, please disconnect it immediately and contact our support team. Your security is our priority.</p>
+</div>
+
+<p>Happy trading,<br><strong>The StackAlpha Team</strong></p>
+{% endblock %}

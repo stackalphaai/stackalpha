@@ -1,0 +1,38 @@
+{% extends "base.txt" %}
+
+{% block content %}
+YOUR SUBSCRIPTION IS ACTIVE!
+
+Hi {{ name }},
+
+Great news! Your StackAlpha subscription has been successfully activated. You now have full access to all premium features.
+
+SUBSCRIPTION DETAILS
+--------------------
+Plan: {{ plan | title }}
+Status: Active
+Valid Until: {{ expires_at }}
+
+With your subscription, you now have access to:
+- Unlimited AI-powered trading signals
+- Automated trade execution on Hyperliquid
+- Real-time position monitoring
+- Priority Telegram notifications
+- Advanced risk management tools
+- 24/7 customer support
+
+Start Trading: https://stackalpha.xyz/dashboard
+
+---
+
+QUICK SETUP GUIDE
+
+1. Connect your wallet - Go to Settings > Wallet to link your Hyperliquid account
+2. Enable Telegram - Get instant notifications on your phone
+3. Set risk preferences - Configure your position sizing and leverage limits
+
+Thank you for choosing StackAlpha. We're excited to have you on board!
+
+Happy trading,
+The StackAlpha Team
+{% endblock %}

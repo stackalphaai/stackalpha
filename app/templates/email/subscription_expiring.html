@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Your Subscription is Expiring Soon</h1>
+
+<p class="lead">Hi {{ name }},</p>
+
+<p>This is a friendly reminder that your StackAlpha subscription will expire soon. To continue enjoying uninterrupted access to AI-powered trading signals and automated execution, please renew your subscription.</p>
+
+<div class="info-box warning">
+    <div class="info-box-title">Subscription Status</div>
+    <div style="margin-top: 12px;">
+        <table style="width: 100%;">
+            <tr>
+                <td style="padding: 8px 0; color: #92400e;">Days Remaining:</td>
+                <td style="padding: 8px 0; font-weight: 700; color: #92400e; text-align: right; font-size: 20px;">{{ days_remaining }} day{% if days_remaining != 1 %}s{% endif %}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #92400e;">Expires On:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #92400e; text-align: right;">{{ expires_at }}</td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<div class="button-container">
+    <a href="https://stackalpha.xyz/subscription" class="button button-warning">Renew Now</a>
+</div>
+
+<div class="divider"></div>
+
+<h2>What Happens When Your Subscription Expires?</h2>
+
+<ul>
+    <li>AI trading signals will be paused</li>
+    <li>Automated trade execution will stop</li>
+    <li>Open positions will not be automatically managed</li>
+    <li>You'll enter a 3-day grace period before full deactivation</li>
+</ul>
+
+<p>Don't miss out on potential trading opportunities. Renew today and keep your trading on autopilot.</p>
+
+<p>Need help? Contact us at <a href="mailto:tech@stackalpha.xyz">tech@stackalpha.xyz</a></p>
+
+<p>Best regards,<br><strong>The StackAlpha Team</strong></p>
+{% endblock %}

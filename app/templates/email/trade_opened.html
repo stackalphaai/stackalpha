@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Trade Opened</h1>
+
+<p class="lead">Hi {{ name }},</p>
+
+<p>A new trade has been executed on your account based on an AI-generated signal.</p>
+
+<div class="info-box {% if direction == 'long' %}success{% else %}info{% endif %}">
+    <div class="info-box-title">Trade Details</div>
+    <div style="margin-top: 12px;">
+        <table style="width: 100%;">
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Symbol:</td>
+                <td style="padding: 8px 0; font-weight: 700; color: #111827; text-align: right; font-size: 18px;">{{ symbol }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Direction:</td>
+                <td style="padding: 8px 0; font-weight: 600; text-align: right; color: {% if direction == 'long' %}#10b981{% else %}#ef4444{% endif %};">{{ direction | upper }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Entry Price:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">${{ entry_price }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Position Size:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">${{ position_size_usd }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Leverage:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">{{ leverage }}x</td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="stats-row">
+        <div class="stat-item">
+            <div class="stat-label">Take Profit</div>
+            <div class="stat-value positive">${{ take_profit_price }}</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">Stop Loss</div>
+            <div class="stat-value negative">${{ stop_loss_price }}</div>
+        </div>
+    </div>
+</div>
+
+{% if signal_confidence %}
+<div class="info-box">
+    <div class="info-box-title">Signal Analysis</div>
+    <p style="margin: 8px 0 0; color: #374151;">AI Confidence Score: <strong>{{ signal_confidence }}%</strong></p>
+    {% if signal_reason %}
+    <p style="margin: 8px 0 0; color: #6b7280; font-size: 14px;">{{ signal_reason }}</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="button-container">
+    <a href="https://stackalpha.xyz/trades/{{ trade_id }}" class="button">View Trade</a>
+</div>
+
+<div class="divider"></div>
+
+<p>This trade will be automatically managed according to your risk settings. You'll be notified when the position is closed.</p>
+
+<p>Happy trading,<br><strong>The StackAlpha Team</strong></p>
+{% endblock %}

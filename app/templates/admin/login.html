@@ -1,0 +1,91 @@
+{% extends "login.html" %}
+
+{% block head_css %}
+{{ super() }}
+<link href="/static/custom/admin/css/custom.css" rel="stylesheet">
+<style>
+    :root {
+        --primary-color: #673AB7;
+        --primary-dark: #512DA8;
+        --primary-darker: #4527A0;
+        --sidebar-bg: #311B92;
+    }
+
+    body {
+        background: linear-gradient(135deg, var(--sidebar-bg) 0%, var(--primary-color) 100%) !important;
+        min-height: 100vh;
+    }
+
+    .card {
+        border: none !important;
+        border-radius: 16px !important;
+        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    .card-header {
+        background: transparent !important;
+        border-bottom: 1px solid rgba(103, 58, 183, 0.2) !important;
+        padding: 1.5rem !important;
+    }
+
+    .card-title {
+        color: var(--primary-darker) !important;
+        font-weight: 700 !important;
+        font-size: 1.5rem !important;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%) !important;
+        border: none !important;
+        padding: 0.75rem 1.5rem !important;
+        font-weight: 600 !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 15px rgba(103, 58, 183, 0.4) !important;
+        transition: all 0.3s ease !important;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(103, 58, 183, 0.5) !important;
+    }
+
+    .form-control {
+        border-radius: 8px !important;
+        padding: 0.75rem 1rem !important;
+        border: 2px solid #e0e0e0 !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .form-control:focus {
+        border-color: var(--primary-color) !important;
+        box-shadow: 0 0 0 3px rgba(103, 58, 183, 0.15) !important;
+    }
+
+    .form-label {
+        color: var(--primary-darker) !important;
+        font-weight: 600 !important;
+        margin-bottom: 0.5rem !important;
+    }
+
+    .text-muted {
+        color: #9575CD !important;
+    }
+
+    a {
+        color: var(--primary-color) !important;
+    }
+
+    .card-body {
+        padding: 2rem !important;
+    }
+
+    /* Logo/Brand area */
+    .card-header::before {
+        content: "🚀";
+        font-size: 2rem;
+        display: block;
+        text-align: center;
+        margin-bottom: 0.5rem;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Security Alert</h1>
+
+<p class="lead">Hi {{ name }},</p>
+
+<p>We detected a security-related activity on your StackAlpha account:</p>
+
+<div class="info-box {% if alert_type in ['login_new_device', 'password_changed', '2fa_disabled'] %}warning{% else %}info{% endif %}">
+    <div class="info-box-title">{{ alert_title }}</div>
+    <div style="margin-top: 12px;">
+        <table style="width: 100%;">
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Activity:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">{{ alert_description }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Date & Time:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">{{ alert_time }}</td>
+            </tr>
+            {% if ip_address %}
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">IP Address:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right; font-family: monospace;">{{ ip_address }}</td>
+            </tr>
+            {% endif %}
+            {% if location %}
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Location:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">{{ location }}</td>
+            </tr>
+            {% endif %}
+            {% if device %}
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Device:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">{{ device }}</td>
+            </tr>
+            {% endif %}
+        </table>
+    </div>
+</div>
+
+{% if alert_type == '2fa_enabled' %}
+<div class="info-box success">
+    <div class="info-box-title">Two-Factor Authentication Enabled</div>
+    <p style="margin: 8px 0 0; color: #065f46;">Your account is now protected with an additional layer of security. You'll need to enter a verification code from your authenticator app when signing in.</p>
+</div>
+{% elif alert_type == '2fa_disabled' %}
+<div class="info-box danger">
+    <div class="info-box-title">Two-Factor Authentication Disabled</div>
+    <p style="margin: 8px 0 0; color: #991b1b;">Two-factor authentication has been removed from your account. We strongly recommend re-enabling it for better security.</p>
+</div>
+{% elif alert_type == 'password_changed' %}
+<div class="info-box warning">
+    <div class="info-box-title">Password Changed</div>
+    <p style="margin: 8px 0 0; color: #92400e;">Your account password has been changed. If you didn't make this change, please secure your account immediately.</p>
+</div>
+{% elif alert_type == 'login_new_device' %}
+<div class="info-box warning">
+    <div class="info-box-title">New Device Login</div>
+    <p style="margin: 8px 0 0; color: #92400e;">Your account was accessed from a new device or location. If this wasn't you, please secure your account.</p>
+</div>
+{% endif %}
+
+<div class="button-container">
+    <a href="https://stackalpha.xyz/settings/security" class="button">Review Security Settings</a>
+</div>
+
+<div class="divider"></div>
+
+<h2>If This Wasn't You</h2>
+
+<p>If you didn't perform this action, please take these steps immediately:</p>
+
+<ol>
+    <li>Change your password</li>
+    <li>Enable two-factor authentication</li>
+    <li>Review your recent account activity</li>
+    <li>Contact support at <a href="mailto:tech@stackalpha.xyz">tech@stackalpha.xyz</a></li>
+</ol>
+
+<p>Your security is our priority. Never share your credentials with anyone.</p>
+
+<p>Stay secure,<br><strong>The StackAlpha Security Team</strong></p>
+{% endblock %}

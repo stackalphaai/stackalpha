@@ -1,0 +1,32 @@
+{% extends "base.txt" %}
+
+{% block content %}
+PAYMENT RECEIVED
+
+Hi {{ name }},
+
+We've successfully received your payment. Thank you for your continued support!
+
+PAYMENT DETAILS
+---------------
+Amount: ${{ amount_usd }}
+Currency: {{ currency }}
+Transaction ID: {{ transaction_id }}
+Date: {{ payment_date }}
+
+{% if plan %}
+SUBSCRIPTION UPDATED
+Your {{ plan | title }} subscription is now active until {{ expires_at }}.
+{% endif %}
+
+View Payment History: https://stackalpha.xyz/billing/history
+
+---
+
+This receipt has been saved to your account. You can view all your transactions in your billing dashboard.
+
+Thank you for choosing StackAlpha!
+
+Best regards,
+The StackAlpha Team
+{% endblock %}

@@ -1,0 +1,41 @@
+[Unit]
+Description=StackAlpha API Server
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+
+[Service]
+Type=notify
+User=stackalpha
+Group=stackalpha
+WorkingDirectory=/home/stackalpha/backend
+Environment="PATH=/home/stackalpha/backend/venv/bin:/usr/local/bin:/usr/bin"
+EnvironmentFile=/home/stackalpha/backend/.env
+
+ExecStart=/home/stackalpha/backend/venv/bin/gunicorn app.main:app \
+    --workers 4 \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 127.0.0.1:8000 \
+    --timeout 120 \
+    --keep-alive 5 \
+    --max-requests 1000 \
+    --max-requests-jitter 50 \
+    --access-logfile /var/log/stackalpha/access.log \
+    --error-logfile /var/log/stackalpha/error.log \
+    --capture-output \
+    --enable-stdio-inheritance
+
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=30
+Restart=always
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/log/stackalpha /home/stackalpha/backend
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>You Earned a Commission!</h1>
+
+<p class="lead">Hi {{ name }},</p>
+
+<p>Great news! One of your referrals just made a payment, and you've earned a commission.</p>
+
+<div class="info-box success" style="text-align: center;">
+    <div class="info-box-title">Commission Earned</div>
+    <div style="font-size: 36px; font-weight: 700; color: #10b981; margin-top: 8px;">
+        +${{ commission_amount }}
+    </div>
+    <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">
+        {{ commission_rate }}% of ${{ original_amount }}
+    </div>
+</div>
+
+<div class="info-box">
+    <div class="info-box-title">Commission Details</div>
+    <div style="margin-top: 12px;">
+        <table style="width: 100%;">
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Referral:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">{{ referral_email }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Commission Type:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">{{ commission_type | title }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Date:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">{{ commission_date }}</td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="stats-row">
+        <div class="stat-item">
+            <div class="stat-label">Pending Earnings</div>
+            <div class="stat-value">${{ pending_earnings }}</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">Total Earnings</div>
+            <div class="stat-value positive">${{ total_earnings }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="button-container">
+    <a href="https://stackalpha.xyz/affiliate" class="button button-success">View Affiliate Dashboard</a>
+</div>
+
+<div class="divider"></div>
+
+<p>Keep sharing your referral link to earn more commissions. You earn {{ initial_commission_rate }}% on initial subscriptions and {{ renewal_commission_rate }}% on renewals!</p>
+
+<p>Your referral link: <code>https://stackalpha.xyz/ref/{{ referral_code }}</code></p>
+
+<p>Best regards,<br><strong>The StackAlpha Team</strong></p>
+{% endblock %}

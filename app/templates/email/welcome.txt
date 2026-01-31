@@ -1,0 +1,37 @@
+{% extends "base.txt" %}
+
+{% block content %}
+WELCOME TO STACKALPHA!
+
+Hi {{ name }},
+
+Thank you for joining StackAlpha. You've just taken the first step toward smarter, AI-powered trading.
+
+ACCOUNT CREATED SUCCESSFULLY
+Email: {{ email }}
+
+With StackAlpha, you get access to:
+- AI-generated trading signals powered by multiple LLM models
+- Automated trade execution on Hyperliquid
+- Real-time position monitoring and alerts
+- Risk management with smart take-profit and stop-loss
+- Telegram notifications for instant updates
+
+Go to Dashboard: https://stackalpha.xyz/dashboard
+
+---
+
+GET STARTED
+
+Here's what to do next:
+
+1. Connect your wallet - Link your Hyperliquid trading wallet
+2. Subscribe to a plan - Choose monthly or yearly access
+3. Configure settings - Set your risk preferences and notification channels
+4. Start trading - Let AI-powered signals work for you
+
+If you have any questions, our support team is here to help.
+
+Welcome aboard,
+The StackAlpha Team
+{% endblock %}

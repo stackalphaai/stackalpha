@@ -1,0 +1,49 @@
+{% extends "base.txt" %}
+
+{% block content %}
+SECURITY ALERT
+
+Hi {{ name }},
+
+We detected a security-related activity on your StackAlpha account:
+
+{{ alert_title | upper }}
+{{ '-' * (alert_title | length) }}
+Activity: {{ alert_description }}
+Date & Time: {{ alert_time }}
+{% if ip_address %}IP Address: {{ ip_address }}{% endif %}
+{% if location %}Location: {{ location }}{% endif %}
+{% if device %}Device: {{ device }}{% endif %}
+
+{% if alert_type == '2fa_enabled' %}
+TWO-FACTOR AUTHENTICATION ENABLED
+Your account is now protected with an additional layer of security.
+{% elif alert_type == '2fa_disabled' %}
+WARNING: TWO-FACTOR AUTHENTICATION DISABLED
+Two-factor authentication has been removed from your account. We strongly recommend re-enabling it for better security.
+{% elif alert_type == 'password_changed' %}
+PASSWORD CHANGED
+Your account password has been changed. If you didn't make this change, please secure your account immediately.
+{% elif alert_type == 'login_new_device' %}
+NEW DEVICE LOGIN
+Your account was accessed from a new device or location. If this wasn't you, please secure your account.
+{% endif %}
+
+Review Security Settings: https://stackalpha.xyz/settings/security
+
+---
+
+IF THIS WASN'T YOU
+
+If you didn't perform this action, please take these steps immediately:
+
+1. Change your password
+2. Enable two-factor authentication
+3. Review your recent account activity
+4. Contact support at tech@stackalpha.xyz
+
+Your security is our priority. Never share your credentials with anyone.
+
+Stay secure,
+The StackAlpha Security Team
+{% endblock %}

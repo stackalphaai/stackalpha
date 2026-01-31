@@ -1,0 +1,21 @@
+{% extends "base.txt" %}
+
+{% block content %}
+VERIFY YOUR EMAIL ADDRESS
+
+Hi {{ name }},
+
+Please verify your email address to complete your StackAlpha account setup. This helps us ensure the security of your account.
+
+Verify your email by clicking this link:
+{{ verification_url }}
+
+IMPORTANT: This link will expire in 24 hours. If you didn't create an account with StackAlpha, you can safely ignore this email.
+
+---
+
+Having trouble? Contact our support team at tech@stackalpha.xyz
+
+Best regards,
+The StackAlpha Team
+{% endblock %}

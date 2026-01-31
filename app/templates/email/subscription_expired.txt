@@ -1,0 +1,31 @@
+{% extends "base.txt" %}
+
+{% block content %}
+YOUR SUBSCRIPTION HAS EXPIRED
+
+Hi {{ name }},
+
+Your StackAlpha subscription has expired. Your account is now in a grace period, and premium features have been temporarily suspended.
+
+SUBSCRIPTION STATUS
+-------------------
+Status: Expired
+Grace Period Ends: {{ grace_period_ends }}
+
+WHAT THIS MEANS:
+- AI trading signals are no longer being generated for your account
+- Automated trade execution has been paused
+- Your open positions are not being monitored
+- Telegram notifications have been suspended
+
+Reactivate Now: https://stackalpha.xyz/subscription
+
+---
+
+We'd hate to see you go! If you experienced any issues or have feedback, please let us know at tech@stackalpha.xyz.
+
+If you have any open positions on Hyperliquid, we recommend manually reviewing and managing them.
+
+Best regards,
+The StackAlpha Team
+{% endblock %}

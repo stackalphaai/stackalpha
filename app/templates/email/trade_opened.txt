@@ -1,0 +1,35 @@
+{% extends "base.txt" %}
+
+{% block content %}
+TRADE OPENED
+
+Hi {{ name }},
+
+A new trade has been executed on your account based on an AI-generated signal.
+
+TRADE DETAILS
+-------------
+Symbol: {{ symbol }}
+Direction: {{ direction | upper }}
+Entry Price: ${{ entry_price }}
+Position Size: ${{ position_size_usd }}
+Leverage: {{ leverage }}x
+
+Take Profit: ${{ take_profit_price }}
+Stop Loss: ${{ stop_loss_price }}
+
+{% if signal_confidence %}
+SIGNAL ANALYSIS
+AI Confidence Score: {{ signal_confidence }}%
+{% if signal_reason %}{{ signal_reason }}{% endif %}
+{% endif %}
+
+View Trade: https://stackalpha.xyz/trades/{{ trade_id }}
+
+---
+
+This trade will be automatically managed according to your risk settings. You'll be notified when the position is closed.
+
+Happy trading,
+The StackAlpha Team
+{% endblock %}

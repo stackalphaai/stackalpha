@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Payment Received</h1>
+
+<p class="lead">Hi {{ name }},</p>
+
+<p>We've successfully received your payment. Thank you for your continued support!</p>
+
+<div class="info-box success">
+    <div class="info-box-title">Payment Details</div>
+    <div style="margin-top: 12px;">
+        <table style="width: 100%;">
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Amount:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #10b981; text-align: right; font-size: 18px;">${{ amount_usd }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Currency:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">{{ currency }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Transaction ID:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right; font-family: monospace; font-size: 13px;">{{ transaction_id }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Date:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">{{ payment_date }}</td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+{% if plan %}
+<div class="info-box info">
+    <div class="info-box-title">Subscription Updated</div>
+    <p style="margin: 8px 0 0; color: #1e40af;">Your <strong>{{ plan | title }}</strong> subscription is now active until <strong>{{ expires_at }}</strong>.</p>
+</div>
+{% endif %}
+
+<div class="button-container">
+    <a href="https://stackalpha.xyz/billing/history" class="button">View Payment History</a>
+</div>
+
+<div class="divider"></div>
+
+<p>This receipt has been saved to your account. You can view all your transactions in your billing dashboard.</p>
+
+<p>Thank you for choosing StackAlpha!</p>
+
+<p>Best regards,<br><strong>The StackAlpha Team</strong></p>
+{% endblock %}

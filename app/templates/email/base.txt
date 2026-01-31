@@ -1,0 +1,15 @@
+{% block content %}{% endblock %}
+
+---
+StackAlpha - AI-Powered Trading Intelligence
+https://stackalpha.xyz
+
+Dashboard: https://stackalpha.xyz/dashboard
+Support: tech@stackalpha.xyz
+Documentation: https://stackalpha.xyz/docs
+
+(c) {{ current_year }} StackAlpha. All rights reserved.
+You're receiving this email because you have an account with StackAlpha.
+
+Manage preferences: https://stackalpha.xyz/settings/notifications
+Unsubscribe: https://stackalpha.xyz/unsubscribe?email={{ email }}

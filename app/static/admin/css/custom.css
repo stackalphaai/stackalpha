@@ -1,0 +1,348 @@
+/* StackAlpha Admin - Deep Purple Theme */
+
+:root {
+    --primary-color: #673AB7;
+    --primary-dark: #512DA8;
+    --primary-darker: #4527A0;
+    --primary-light: #9575CD;
+    --primary-lighter: #D1C4E9;
+    --accent-color: #7C4DFF;
+    --accent-light: #B388FF;
+    --text-on-primary: #FFFFFF;
+    --sidebar-bg: #311B92;
+    --sidebar-hover: #4527A0;
+    --sidebar-active: #673AB7;
+    --header-bg: #512DA8;
+    --success-color: #4CAF50;
+    --warning-color: #FF9800;
+    --danger-color: #F44336;
+    --info-color: #7C4DFF;
+}
+
+/* Sidebar */
+.sidebar {
+    background: linear-gradient(180deg, var(--sidebar-bg) 0%, var(--primary-darker) 100%) !important;
+}
+
+.sidebar .nav-link {
+    color: rgba(255, 255, 255, 0.85) !important;
+    border-radius: 8px;
+    margin: 2px 8px;
+    transition: all 0.2s ease;
+}
+
+.sidebar .nav-link:hover {
+    background-color: var(--sidebar-hover) !important;
+    color: var(--text-on-primary) !important;
+}
+
+.sidebar .nav-link.active {
+    background-color: var(--sidebar-active) !important;
+    color: var(--text-on-primary) !important;
+    box-shadow: 0 2px 8px rgba(103, 58, 183, 0.4);
+}
+
+.sidebar .nav-link i {
+    color: var(--primary-light) !important;
+}
+
+.sidebar .nav-link:hover i,
+.sidebar .nav-link.active i {
+    color: var(--text-on-primary) !important;
+}
+
+/* Sidebar Brand/Logo */
+.sidebar-brand,
+.sidebar .sidebar-brand {
+    background-color: var(--primary-darker) !important;
+    color: var(--text-on-primary) !important;
+    padding: 1.2rem !important;
+}
+
+.sidebar-brand-text {
+    font-weight: 700 !important;
+    letter-spacing: 0.5px;
+}
+
+/* Sidebar Category Headers */
+.sidebar .nav-item .nav-link[data-bs-toggle="collapse"] {
+    color: var(--primary-lighter) !important;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+}
+
+/* Header/Navbar */
+.navbar,
+.topbar {
+    background: linear-gradient(90deg, var(--header-bg) 0%, var(--primary-color) 100%) !important;
+    box-shadow: 0 2px 10px rgba(81, 45, 168, 0.3);
+}
+
+.navbar .nav-link,
+.topbar .nav-link {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.navbar .nav-link:hover,
+.topbar .nav-link:hover {
+    color: var(--text-on-primary) !important;
+}
+
+/* Buttons */
+.btn-primary {
+    background-color: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 2px 6px rgba(103, 58, 183, 0.3);
+    transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-dark) !important;
+    border-color: var(--primary-dark) !important;
+    box-shadow: 0 4px 12px rgba(103, 58, 183, 0.4);
+    transform: translateY(-1px);
+}
+
+.btn-primary:active,
+.btn-primary:focus {
+    background-color: var(--primary-darker) !important;
+    border-color: var(--primary-darker) !important;
+}
+
+.btn-outline-primary {
+    color: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--primary-color) !important;
+    color: var(--text-on-primary) !important;
+}
+
+.btn-info {
+    background-color: var(--info-color) !important;
+    border-color: var(--info-color) !important;
+}
+
+.btn-success {
+    background-color: var(--success-color) !important;
+    border-color: var(--success-color) !important;
+}
+
+.btn-warning {
+    background-color: var(--warning-color) !important;
+    border-color: var(--warning-color) !important;
+}
+
+.btn-danger {
+    background-color: var(--danger-color) !important;
+    border-color: var(--danger-color) !important;
+}
+
+/* Cards */
+.card {
+    border: none !important;
+    border-radius: 12px !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08) !important;
+    transition: all 0.2s ease;
+}
+
+.card:hover {
+    box-shadow: 0 4px 20px rgba(103, 58, 183, 0.15) !important;
+}
+
+.card-header {
+    background-color: transparent !important;
+    border-bottom: 1px solid rgba(103, 58, 183, 0.1) !important;
+    font-weight: 600;
+    color: var(--primary-darker);
+}
+
+/* Tables */
+.table thead th {
+    background-color: var(--primary-lighter) !important;
+    color: var(--primary-darker) !important;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    border: none !important;
+}
+
+.table tbody tr:hover {
+    background-color: rgba(103, 58, 183, 0.05) !important;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(103, 58, 183, 0.02);
+}
+
+/* Links */
+a {
+    color: var(--primary-color);
+    transition: color 0.2s ease;
+}
+
+a:hover {
+    color: var(--primary-dark);
+}
+
+/* Badges */
+.badge-primary,
+.bg-primary {
+    background-color: var(--primary-color) !important;
+}
+
+.badge-info,
+.bg-info {
+    background-color: var(--info-color) !important;
+}
+
+/* Form Controls */
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--primary-light) !important;
+    box-shadow: 0 0 0 0.2rem rgba(103, 58, 183, 0.25) !important;
+}
+
+/* Pagination */
+.page-link {
+    color: var(--primary-color) !important;
+}
+
+.page-item.active .page-link {
+    background-color: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    color: var(--text-on-primary) !important;
+}
+
+.page-link:hover {
+    background-color: var(--primary-lighter) !important;
+    color: var(--primary-darker) !important;
+}
+
+/* Dropdown */
+.dropdown-item:hover,
+.dropdown-item:focus {
+    background-color: var(--primary-lighter) !important;
+    color: var(--primary-darker) !important;
+}
+
+.dropdown-item.active,
+.dropdown-item:active {
+    background-color: var(--primary-color) !important;
+    color: var(--text-on-primary) !important;
+}
+
+/* Alerts */
+.alert-primary {
+    background-color: var(--primary-lighter) !important;
+    border-color: var(--primary-light) !important;
+    color: var(--primary-darker) !important;
+}
+
+.alert-info {
+    background-color: rgba(124, 77, 255, 0.1) !important;
+    border-color: var(--accent-color) !important;
+    color: var(--primary-darker) !important;
+}
+
+/* Login Page */
+.login-container,
+.auth-container {
+    background: linear-gradient(135deg, var(--sidebar-bg) 0%, var(--primary-color) 100%) !important;
+}
+
+.login-card,
+.auth-card {
+    border-radius: 16px !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Progress bars */
+.progress-bar {
+    background-color: var(--primary-color) !important;
+}
+
+/* Checkboxes and radios */
+.form-check-input:checked {
+    background-color: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--primary-light);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color);
+}
+
+/* Loading spinner */
+.spinner-border {
+    color: var(--primary-color) !important;
+}
+
+/* Breadcrumb */
+.breadcrumb-item.active {
+    color: var(--primary-color) !important;
+}
+
+.breadcrumb-item a {
+    color: var(--primary-dark) !important;
+}
+
+/* Modal */
+.modal-header {
+    background-color: var(--primary-color) !important;
+    color: var(--text-on-primary) !important;
+}
+
+.modal-header .btn-close {
+    filter: brightness(0) invert(1);
+}
+
+/* Tabler specific overrides */
+.navbar-brand-autodark {
+    filter: none !important;
+}
+
+.nav-link-icon {
+    color: var(--primary-light) !important;
+}
+
+/* Status badges with better colors */
+.badge.bg-success { background-color: var(--success-color) !important; }
+.badge.bg-warning { background-color: var(--warning-color) !important; color: #000 !important; }
+.badge.bg-danger { background-color: var(--danger-color) !important; }
+.badge.bg-info { background-color: var(--info-color) !important; }
+.badge.bg-primary { background-color: var(--primary-color) !important; }
+.badge.bg-secondary { background-color: var(--primary-light) !important; }
+
+/* Action buttons in tables */
+.table .btn-sm {
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+}
+
+/* Empty state */
+.empty-title {
+    color: var(--primary-darker) !important;
+}
+
+.empty-subtitle {
+    color: var(--primary-light) !important;
+}

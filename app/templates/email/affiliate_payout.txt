@@ -1,0 +1,40 @@
+{% extends "base.txt" %}
+
+{% block content %}
+PAYOUT {% if status == 'completed' %}PROCESSED{% elif status == 'failed' %}FAILED{% else %}{{ status | upper }}{% endif %}
+
+Hi {{ name }},
+
+{% if status == 'completed' %}
+Your affiliate payout has been successfully processed and sent to your wallet.
+{% elif status == 'failed' %}
+Unfortunately, we encountered an issue processing your payout. Please check your payout settings and try again.
+{% elif status == 'processing' %}
+Your payout request is being processed. You'll receive another notification once it's complete.
+{% endif %}
+
+PAYOUT DETAILS
+--------------
+Amount: ${{ amount }} {{ currency }}
+Status: {{ status | title }}
+Wallet Address: {{ payout_address }}
+{% if transaction_hash %}Transaction: {{ transaction_hash }}{% endif %}
+Date: {{ payout_date }}
+
+{% if status == 'failed' and error_message %}
+ERROR: {{ error_message }}
+{% endif %}
+
+View Payout History: https://stackalpha.xyz/affiliate/payouts
+
+---
+
+{% if status == 'completed' %}
+Thank you for being a valued affiliate partner. Keep referring and earning!
+{% elif status == 'failed' %}
+If you need assistance, please contact our support team at tech@stackalpha.xyz.
+{% endif %}
+
+Best regards,
+The StackAlpha Team
+{% endblock %}

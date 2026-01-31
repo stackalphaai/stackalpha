@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Welcome to StackAlpha!</h1>
+
+<p class="lead">Hi {{ name }},</p>
+
+<p>Thank you for joining StackAlpha. You've just taken the first step toward smarter, AI-powered trading.</p>
+
+<div class="info-box success">
+    <div class="info-box-title">Account Created Successfully</div>
+    <div class="info-box-value">{{ email }}</div>
+</div>
+
+<p>With StackAlpha, you get access to:</p>
+
+<ul class="feature-list">
+    <li>AI-generated trading signals powered by multiple LLM models</li>
+    <li>Automated trade execution on Hyperliquid</li>
+    <li>Real-time position monitoring and alerts</li>
+    <li>Risk management with smart take-profit and stop-loss</li>
+    <li>Telegram notifications for instant updates</li>
+</ul>
+
+<div class="button-container">
+    <a href="https://stackalpha.xyz/dashboard" class="button">Go to Dashboard</a>
+</div>
+
+<div class="divider"></div>
+
+<h2>Get Started</h2>
+
+<p>Here's what to do next:</p>
+
+<ol>
+    <li><strong>Connect your wallet</strong> - Link your Hyperliquid trading wallet</li>
+    <li><strong>Subscribe to a plan</strong> - Choose monthly or yearly access</li>
+    <li><strong>Configure settings</strong> - Set your risk preferences and notification channels</li>
+    <li><strong>Start trading</strong> - Let AI-powered signals work for you</li>
+</ol>
+
+<p>If you have any questions, our support team is here to help.</p>
+
+<p>Welcome aboard,<br><strong>The StackAlpha Team</strong></p>
+{% endblock %}

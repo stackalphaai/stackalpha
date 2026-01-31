@@ -1,0 +1,30 @@
+{% extends "base.txt" %}
+
+{% block content %}
+PAYMENT FAILED
+
+Hi {{ name }},
+
+We were unable to process your recent payment. Don't worry - your account is still active, but we need you to update your payment information.
+
+PAYMENT ISSUE
+-------------
+Amount: ${{ amount_usd }}
+Status: Failed
+{% if error_message %}Reason: {{ error_message }}{% endif %}
+
+COMMON REASONS FOR PAYMENT FAILURE:
+- Insufficient funds in wallet
+- Transaction timeout or network congestion
+- Payment sent to wrong address
+- Minimum payment amount not met
+
+Retry Payment: https://stackalpha.xyz/subscription
+
+---
+
+If you believe this is an error or need assistance, please contact our support team at tech@stackalpha.xyz with your transaction details.
+
+Best regards,
+The StackAlpha Team
+{% endblock %}

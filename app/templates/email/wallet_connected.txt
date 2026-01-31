@@ -1,0 +1,36 @@
+{% extends "base.txt" %}
+
+{% block content %}
+WALLET CONNECTED SUCCESSFULLY
+
+Hi {{ name }},
+
+Your trading wallet has been successfully connected to your StackAlpha account. You're now ready to start automated trading!
+
+WALLET DETAILS
+--------------
+Wallet Address: {{ wallet_address }}
+Network: Hyperliquid
+Status: Active
+Connected At: {{ connected_at }}
+
+{% if trading_enabled %}
+AUTO-TRADING ENABLED
+Automated trading is now active. AI signals will be executed automatically based on your risk settings.
+{% endif %}
+
+WHAT HAPPENS NEXT:
+- AI monitors markets and generates trading signals
+- Signals are automatically executed on your Hyperliquid account
+- Positions are managed with smart take-profit and stop-loss levels
+- You receive real-time notifications on trades
+
+Manage Wallet Settings: https://stackalpha.xyz/settings/wallet
+
+---
+
+SECURITY REMINDER: If you didn't connect this wallet, please disconnect it immediately and contact our support team. Your security is our priority.
+
+Happy trading,
+The StackAlpha Team
+{% endblock %}

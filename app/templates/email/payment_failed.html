@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Payment Failed</h1>
+
+<p class="lead">Hi {{ name }},</p>
+
+<p>We were unable to process your recent payment. Don't worry - your account is still active, but we need you to update your payment information.</p>
+
+<div class="info-box danger">
+    <div class="info-box-title">Payment Issue</div>
+    <div style="margin-top: 12px;">
+        <table style="width: 100%;">
+            <tr>
+                <td style="padding: 8px 0; color: #991b1b;">Amount:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #991b1b; text-align: right;">${{ amount_usd }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #991b1b;">Status:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #991b1b; text-align: right;">Failed</td>
+            </tr>
+            {% if error_message %}
+            <tr>
+                <td style="padding: 8px 0; color: #991b1b;">Reason:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #991b1b; text-align: right;">{{ error_message }}</td>
+            </tr>
+            {% endif %}
+        </table>
+    </div>
+</div>
+
+<p><strong>Common reasons for payment failure:</strong></p>
+
+<ul>
+    <li>Insufficient funds in wallet</li>
+    <li>Transaction timeout or network congestion</li>
+    <li>Payment sent to wrong address</li>
+    <li>Minimum payment amount not met</li>
+</ul>
+
+<div class="button-container">
+    <a href="https://stackalpha.xyz/subscription" class="button button-danger">Retry Payment</a>
+</div>
+
+<div class="divider"></div>
+
+<p>If you believe this is an error or need assistance, please contact our support team at <a href="mailto:tech@stackalpha.xyz">tech@stackalpha.xyz</a> with your transaction details.</p>
+
+<p>Best regards,<br><strong>The StackAlpha Team</strong></p>
+{% endblock %}

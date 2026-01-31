@@ -1,0 +1,32 @@
+{% extends "base.txt" %}
+
+{% block content %}
+YOUR SUBSCRIPTION IS EXPIRING SOON
+
+Hi {{ name }},
+
+This is a friendly reminder that your StackAlpha subscription will expire soon. To continue enjoying uninterrupted access to AI-powered trading signals and automated execution, please renew your subscription.
+
+SUBSCRIPTION STATUS
+-------------------
+Days Remaining: {{ days_remaining }} day{% if days_remaining != 1 %}s{% endif %}
+Expires On: {{ expires_at }}
+
+Renew Now: https://stackalpha.xyz/subscription
+
+---
+
+WHAT HAPPENS WHEN YOUR SUBSCRIPTION EXPIRES?
+
+- AI trading signals will be paused
+- Automated trade execution will stop
+- Open positions will not be automatically managed
+- You'll enter a 3-day grace period before full deactivation
+
+Don't miss out on potential trading opportunities. Renew today and keep your trading on autopilot.
+
+Need help? Contact us at tech@stackalpha.xyz
+
+Best regards,
+The StackAlpha Team
+{% endblock %}

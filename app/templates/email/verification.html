@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Verify Your Email Address</h1>
+
+<p class="lead">Hi {{ name }},</p>
+
+<p>Please verify your email address to complete your StackAlpha account setup. This helps us ensure the security of your account.</p>
+
+<div class="button-container">
+    <a href="{{ verification_url }}" class="button">Verify Email Address</a>
+</div>
+
+<p>Or copy and paste this link into your browser:</p>
+
+<div class="link-box">{{ verification_url }}</div>
+
+<div class="info-box warning">
+    <div class="info-box-title">Important</div>
+    <p style="margin: 0; color: #92400e;">This link will expire in <strong>24 hours</strong>. If you didn't create an account with StackAlpha, you can safely ignore this email.</p>
+</div>
+
+<div class="divider"></div>
+
+<p>Having trouble? Contact our support team at <a href="mailto:tech@stackalpha.xyz">tech@stackalpha.xyz</a></p>
+
+<p>Best regards,<br><strong>The StackAlpha Team</strong></p>
+{% endblock %}
