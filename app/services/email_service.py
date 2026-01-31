@@ -2,18 +2,16 @@
 Email service for StackAlpha.
 
 This module provides a comprehensive email service using Jinja2 templates
-and async SMTP delivery. All emails are designed to be sent asynchronously
-via Celery tasks to avoid blocking API requests.
+and Zoho ZeptoMail API for async delivery. All emails are designed to be
+sent asynchronously via Celery tasks to avoid blocking API requests.
 """
 
 import logging
 from datetime import datetime
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Any
 
-import aiosmtplib
+import httpx
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound, select_autoescape
 
 from app.config import settings
@@ -35,21 +33,19 @@ logger = logging.getLogger(__name__)
 
 class EmailService:
     """
-    Async email service using Jinja2 templates.
+    Async email service using Jinja2 templates and Zoho ZeptoMail API.
 
     This service handles all email operations including template rendering
-    and SMTP delivery. It is designed to be used within Celery tasks for
+    and API delivery. It is designed to be used within Celery tasks for
     asynchronous email sending.
     """
 
     def __init__(self) -> None:
-        """Initialize the email service with SMTP configuration."""
-        self.smtp_host = settings.smtp_host
-        self.smtp_port = settings.smtp_port
-        self.smtp_user = settings.smtp_user
-        self.smtp_password = settings.smtp_password
-        self.from_name = settings.smtp_from_name
-        self.from_email = settings.smtp_from_email
+        """Initialize the email service with ZeptoMail configuration."""
+        self.api_url = settings.zeptomail_api_url
+        self.api_key = settings.zeptomail_api_key
+        self.from_name = settings.email_from_name
+        self.from_email = settings.email_from_address
 
         # Set up Jinja2 template environment
         template_dir = Path(__file__).parent.parent / "templates" / "email"
@@ -105,15 +101,17 @@ class EmailService:
         subject: str,
         html_content: str,
         text_content: str | None = None,
+        to_name: str | None = None,
     ) -> bool:
         """
-        Send an email via SMTP.
+        Send an email via Zoho ZeptoMail API.
 
         Args:
             to_email: Recipient email address.
             subject: Email subject line.
             html_content: HTML email body.
             text_content: Plain text email body (optional).
+            to_name: Recipient name (optional).
 
         Returns:
             True if email was sent successfully.
@@ -121,32 +119,58 @@ class EmailService:
         Raises:
             EmailError: If email sending fails.
         """
+        if not self.api_key:
+            logger.warning(f"ZeptoMail API key not configured, skipping email to {to_email}")
+            return False
+
+        payload = {
+            "from": {"address": self.from_email, "name": self.from_name},
+            "to": [
+                {
+                    "email_address": {
+                        "address": to_email,
+                        "name": to_name or to_email.split("@")[0],
+                    }
+                }
+            ],
+            "subject": subject,
+            "htmlbody": html_content,
+        }
+
+        if text_content:
+            payload["textbody"] = text_content
+
+        headers = {
+            "accept": "application/json",
+            "content-type": "application/json",
+            "authorization": f"Zoho-enczapikey {self.api_key}",
+        }
+
         try:
-            message = MIMEMultipart("alternative")
-            message["From"] = f"{self.from_name} <{self.from_email}>"
-            message["To"] = to_email
-            message["Subject"] = subject
-            message["X-Mailer"] = "StackAlpha Email Service"
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    self.api_url,
+                    json=payload,
+                    headers=headers,
+                )
 
-            if text_content:
-                message.attach(MIMEText(text_content, "plain", "utf-8"))
-            message.attach(MIMEText(html_content, "html", "utf-8"))
+                if response.status_code == 200:
+                    logger.info(f"Email sent successfully to {to_email}: {subject}")
+                    return True
+                else:
+                    error_data = response.json() if response.content else {}
+                    error_msg = error_data.get("message", response.text)
+                    logger.error(
+                        f"ZeptoMail API error ({response.status_code}) for {to_email}: {error_msg}"
+                    )
+                    raise EmailError(f"ZeptoMail API error: {error_msg}")
 
-            await aiosmtplib.send(
-                message,
-                hostname=self.smtp_host,
-                port=self.smtp_port,
-                username=self.smtp_user,
-                password=self.smtp_password,
-                start_tls=True,
-            )
-
-            logger.info(f"Email sent successfully to {to_email}: {subject}")
-            return True
-
-        except aiosmtplib.SMTPException as e:
-            logger.error(f"SMTP error sending email to {to_email}: {e}")
-            raise EmailError(f"SMTP error: {str(e)}") from e
+        except httpx.TimeoutException as e:
+            logger.error(f"Timeout sending email to {to_email}: {e}")
+            raise EmailError(f"Email request timed out: {str(e)}") from e
+        except httpx.RequestError as e:
+            logger.error(f"Request error sending email to {to_email}: {e}")
+            raise EmailError(f"Email request failed: {str(e)}") from e
         except Exception as e:
             logger.error(f"Failed to send email to {to_email}: {e}")
             raise EmailError(f"Failed to send email: {str(e)}") from e
@@ -188,7 +212,7 @@ class EmailService:
         html_content = self._render_template(template_name, full_context, is_html=True)
         text_content = self._render_template(template_name, full_context, is_html=False)
 
-        return await self.send_email(to_email, subject, html_content, text_content)
+        return await self.send_email(to_email, subject, html_content, text_content, name)
 
     # Convenience methods for specific email types
 

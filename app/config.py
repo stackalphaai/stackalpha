@@ -68,13 +68,11 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_webhook_url: str = ""
 
-    # Email
-    smtp_host: str = "smtp.zoho.com"
-    smtp_port: int = 587
-    smtp_user: str = ""
-    smtp_password: str = ""
-    smtp_from_name: str = "StackAlpha"
-    smtp_from_email: str = ""
+    # Email (Zoho ZeptoMail API)
+    zeptomail_api_key: str = ""
+    zeptomail_api_url: str = "https://api.zeptomail.com/v1.1/email"
+    email_from_name: str = "StackAlpha"
+    email_from_address: str = "noreply@stackalpha.xyz"
 
     # Subscription
     subscription_monthly_price: float = 50.00
