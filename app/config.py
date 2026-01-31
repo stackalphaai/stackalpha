@@ -66,6 +66,7 @@ class Settings(BaseSettings):
 
     # Telegram
     telegram_bot_token: str = ""
+    telegram_bot_username: str = "stackalpha_bot"
     telegram_webhook_url: str = ""
 
     # Email (Zoho ZeptoMail API)

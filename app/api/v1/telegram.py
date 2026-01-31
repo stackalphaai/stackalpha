@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import CurrentUser
 from app.schemas import SuccessResponse
@@ -19,6 +20,8 @@ class TelegramConnectionResponse(BaseModel):
     is_connected: bool
     telegram_username: str | None = None
     verification_code: str | None = None
+    deep_link: str | None = None
+    bot_username: str | None = None
     notifications_enabled: bool = False
     signal_notifications: bool = False
     trade_notifications: bool = False
@@ -62,9 +65,14 @@ async def connect_telegram(
     code = await telegram_service.generate_verification_code(current_user)
     await db.commit()
 
+    bot_username = settings.telegram_bot_username
+    deep_link = f"https://t.me/{bot_username}?start={code}"
+
     return TelegramConnectionResponse(
         is_connected=False,
         verification_code=code,
+        deep_link=deep_link,
+        bot_username=bot_username,
     )
 
 
