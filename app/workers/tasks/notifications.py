@@ -762,11 +762,11 @@ async def _send_telegram_notification(
 ) -> bool:
     from sqlalchemy import select
 
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.models import TelegramConnection
     from app.services.telegram_service import TelegramService
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         result = await db.execute(
             select(TelegramConnection).where(
                 TelegramConnection.user_id == user_id,
@@ -828,7 +828,7 @@ async def _send_renewal_reminders() -> int:
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.models import Subscription, SubscriptionStatus
     from app.services.email_service import get_email_service
     from app.services.telegram_service import TelegramService
@@ -836,7 +836,7 @@ async def _send_renewal_reminders() -> int:
     now = datetime.now(UTC)
     reminder_threshold = now + timedelta(days=3)
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         result = await db.execute(
             select(Subscription)
             .options(selectinload(Subscription.user))
@@ -914,7 +914,7 @@ async def _send_expired_subscription_emails() -> int:
     from sqlalchemy.orm import selectinload
 
     from app.config import settings
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.models import Subscription, SubscriptionStatus
     from app.services.email_service import get_email_service
 
@@ -922,7 +922,7 @@ async def _send_expired_subscription_emails() -> int:
     yesterday = now - timedelta(days=1)
     grace_period_days = settings.subscription_grace_period_days
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         # Find subscriptions that expired in the last 24 hours
         result = await db.execute(
             select(Subscription)
@@ -977,10 +977,10 @@ def broadcast_notification_task(
 
 
 async def _broadcast_notification(message: str, notification_type: str) -> int:
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.services.telegram_service import TelegramService
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         telegram_service = TelegramService(db)
         sent_count = await telegram_service.broadcast_message(message)
         return sent_count
@@ -1006,12 +1006,12 @@ def cleanup_old_notifications(self, days: int = 30) -> int:
 async def _cleanup_old_notifications(days: int) -> int:
     from sqlalchemy import delete
 
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.models import Notification
 
     cutoff = datetime.now(UTC) - timedelta(days=days)
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         result = await db.execute(delete(Notification).where(Notification.created_at < cutoff))
         await db.commit()
         return result.rowcount

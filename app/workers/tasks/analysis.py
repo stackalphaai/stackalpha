@@ -18,7 +18,7 @@ def analyze_all_markets(self):
 async def _analyze_all_markets():
     from sqlalchemy import select
 
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.models import TelegramConnection
     from app.services.hyperliquid import get_info_service
     from app.services.telegram_service import TelegramService
@@ -34,7 +34,7 @@ async def _analyze_all_markets():
 
     signals_generated = []
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         signal_service = SignalService(db)
 
         for coin_data in high_volume_coins:
@@ -91,10 +91,10 @@ def analyze_single_market(self, symbol: str):
 
 
 async def _analyze_single_market(symbol: str):
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.services.trading import SignalService
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         signal_service = SignalService(db)
         signal = await signal_service.generate_signal(symbol)
         await db.commit()

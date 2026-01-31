@@ -16,10 +16,10 @@ def sync_all_positions(self):
 
 
 async def _sync_all_positions():
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.services.trading import PositionSyncService
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         sync_service = PositionSyncService(db)
         synced_count = await sync_service.sync_all_positions()
         await db.commit()
@@ -53,12 +53,12 @@ async def _execute_trade(
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.models import Signal, User, Wallet
     from app.services.telegram_service import TelegramService
     from app.services.trading import TradeExecutor
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         result = await db.execute(
             select(User).options(selectinload(User.telegram_connection)).where(User.id == user_id)
         )
@@ -105,12 +105,12 @@ async def _close_trade(trade_id: str, reason: str):
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.models import Trade, TradeCloseReason, User, Wallet
     from app.services.telegram_service import TelegramService
     from app.services.trading import TradeExecutor
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         result = await db.execute(
             select(Trade)
             .options(selectinload(Trade.user).selectinload(User.telegram_connection))
@@ -156,11 +156,11 @@ def monitor_tp_sl(self, trade_id: str):
 async def _monitor_tp_sl(trade_id: str):
     from sqlalchemy import select
 
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.models import Trade, TradeCloseReason, TradeDirection, TradeStatus
     from app.services.hyperliquid import get_info_service
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         result = await db.execute(select(Trade).where(Trade.id == trade_id))
         trade = result.scalar_one_or_none()
 

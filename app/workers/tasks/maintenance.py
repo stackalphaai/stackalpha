@@ -17,10 +17,10 @@ def check_subscriptions(self):
 
 
 async def _check_subscriptions():
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.services import PaymentService
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         payment_service = PaymentService(db)
         expired_count = await payment_service.check_expired_subscriptions()
         await db.commit()
@@ -38,10 +38,10 @@ def expire_old_signals(self):
 
 
 async def _expire_old_signals():
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.services.trading import SignalService
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         signal_service = SignalService(db)
         expired_count = await signal_service.expire_old_signals()
         await db.commit()
@@ -63,12 +63,12 @@ async def _cleanup_old_notifications():
 
     from sqlalchemy import delete
 
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.models import Notification
 
     cutoff = datetime.now(UTC) - timedelta(days=30)
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         result = await db.execute(
             delete(Notification).where(
                 Notification.created_at < cutoff,
@@ -93,11 +93,11 @@ def sync_wallet_balances(self):
 async def _sync_wallet_balances():
     from sqlalchemy import select
 
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.models import Wallet, WalletStatus
     from app.services.trading import PositionSyncService
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         result = await db.execute(
             select(Wallet).where(
                 Wallet.status == WalletStatus.ACTIVE,
@@ -133,12 +133,12 @@ async def _generate_daily_report():
 
     from sqlalchemy import func, select
 
-    from app.database import get_db_context
+    from app.workers.database import get_worker_db
     from app.models import Payment, PaymentStatus, Signal, Trade, TradeStatus, User
 
     yesterday = datetime.now(UTC) - timedelta(days=1)
 
-    async with get_db_context() as db:
+    async with get_worker_db() as db:
         new_users = await db.scalar(select(func.count(User.id)).where(User.created_at >= yesterday))
 
         total_trades = await db.scalar(
