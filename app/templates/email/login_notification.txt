@@ -1,0 +1,52 @@
+New Sign-in Detected
+====================
+
+Hi {{ name }},
+
+We detected a new sign-in to your StackAlpha account. If this was you, no action is needed.
+
+SIGN-IN DETAILS
+---------------
+
+Location: {{ location }}
+{% if timezone %}Timezone: {{ timezone }}{% endif %}
+
+Device: {{ device }}
+{% if browser and os %}Browser: {{ browser }} on {{ os }}{% endif %}
+
+IP Address: {{ ip_address }}
+{% if isp %}ISP: {{ isp }}{% endif %}
+
+Date & Time: {{ login_time }}
+
+{% if is_suspicious %}
+⚠️  SUSPICIOUS ACTIVITY DETECTED
+{% if is_vpn %}• This login appears to be from a VPN or proxy service.{% endif %}
+{% if is_new_location %}• This is a new location we haven't seen before.{% endif %}
+{% if is_new_device %}• This is a new device we haven't seen before.{% endif %}
+{% endif %}
+
+WASN'T YOU?
+-----------
+
+If you didn't sign in to your account, your password may have been compromised. Take these steps immediately:
+
+1. Change your password - Go to Settings and update your password
+2. Enable 2FA - Add an extra layer of security with two-factor authentication
+3. Review activity - Check your account for any unauthorized changes
+
+Secure your account: https://stackalpha.xyz/settings/security
+
+---------------
+
+Why am I receiving this?
+We send login notifications to help you monitor access to your account. You can manage these notifications in your notification settings.
+
+Manage notifications: https://stackalpha.xyz/settings/notifications
+
+Stay safe,
+The StackAlpha Security Team
+
+---
+© {{ current_year }} StackAlpha. All rights reserved.
+https://stackalpha.xyz

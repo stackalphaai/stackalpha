@@ -1,4 +1,5 @@
 import logging
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
@@ -25,6 +26,8 @@ from app.schemas import (
 from app.services import AuthService
 from app.services.affiliate_service import AffiliateService
 from app.services.email_service import get_email_service
+from app.services.geolocation_service import get_geolocation_service
+from app.utils.device import parse_user_agent
 
 logger = logging.getLogger(__name__)
 
@@ -77,16 +80,111 @@ async def _send_verification_email(email: str, token: str) -> None:
 @router.post("/login", response_model=TokenResponse)
 async def login(
     data: LoginRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
     db: DB,
 ):
+    # Extract client info for login notification
+    ip_address = _get_client_ip(request)
+    user_agent = request.headers.get("user-agent")
+
     auth_service = AuthService(db)
-    user, tokens = await auth_service.login(
+    user, tokens, metadata = await auth_service.login(
         email=data.email,
         password=data.password,
         totp_code=data.totp_code,
+        ip_address=ip_address,
+        user_agent=user_agent,
     )
     await db.commit()
+
+    # Send login notification in background
+    background_tasks.add_task(
+        _send_login_notification,
+        user.email,
+        user.full_name,
+        ip_address,
+        user_agent,
+        metadata.login_time,
+    )
+
     return tokens
+
+
+def _get_client_ip(request: Request) -> str:
+    """
+    Extract the real client IP address from the request.
+
+    Handles common proxy headers (X-Forwarded-For, X-Real-IP) to get
+    the actual client IP when behind a reverse proxy or load balancer.
+    """
+    # Check X-Forwarded-For header (common for proxies/load balancers)
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        # X-Forwarded-For can contain multiple IPs, first one is the client
+        return forwarded_for.split(",")[0].strip()
+
+    # Check X-Real-IP header (used by nginx)
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+
+    # Check CF-Connecting-IP header (Cloudflare)
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
+
+    # Fall back to direct client IP
+    if request.client:
+        return request.client.host
+
+    return "Unknown"
+
+
+async def _send_login_notification(
+    email: str,
+    name: str | None,
+    ip_address: str | None,
+    user_agent: str | None,
+    login_time: datetime | None,
+) -> None:
+    """
+    Background task to send enterprise-grade login notification email.
+
+    Gathers geolocation data from IP and device info from user-agent,
+    then sends a comprehensive login notification email.
+    """
+    try:
+        # Get geolocation data
+        geo_service = get_geolocation_service()
+        geo = await geo_service.lookup(ip_address or "")
+
+        # Parse device info
+        device = parse_user_agent(user_agent)
+
+        # Determine if this login might be suspicious
+        is_suspicious = geo.is_proxy or geo.is_vpn or geo.is_hosting
+
+        # Send the notification email
+        email_service = get_email_service()
+        await email_service.send_login_notification_email(
+            to_email=email,
+            ip_address=ip_address or "Unknown",
+            location=geo.display_location,
+            device=device.display_device,
+            login_time=login_time or datetime.now(UTC),
+            browser=device.browser,
+            os=device.os,
+            timezone=geo.timezone,
+            isp=geo.isp,
+            is_suspicious=is_suspicious,
+            is_vpn=geo.is_vpn or geo.is_proxy,
+            name=name,
+        )
+        logger.info(f"Login notification sent to {email}")
+
+    except Exception as e:
+        logger.error(f"Failed to send login notification to {email}: {e}")
 
 
 @router.post("/refresh", response_model=TokenResponse)

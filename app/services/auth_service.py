@@ -1,4 +1,5 @@
 import secrets
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import pyotp
@@ -20,6 +21,15 @@ from app.core.security import (
 )
 from app.models import User
 from app.schemas.auth import RegisterRequest, TokenResponse
+
+
+@dataclass
+class LoginMetadata:
+    """Metadata captured during login for notifications and auditing."""
+
+    ip_address: str | None = None
+    user_agent: str | None = None
+    login_time: datetime | None = None
 
 
 class AuthService:
@@ -55,7 +65,22 @@ class AuthService:
         email: str,
         password: str,
         totp_code: str | None = None,
-    ) -> tuple[User, TokenResponse]:
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> tuple[User, TokenResponse, LoginMetadata]:
+        """
+        Authenticate user and return tokens with login metadata.
+
+        Args:
+            email: User's email address.
+            password: User's password.
+            totp_code: Optional 2FA code if enabled.
+            ip_address: Client IP address for login notification.
+            user_agent: Client user agent for device detection.
+
+        Returns:
+            Tuple of (user, tokens, login_metadata) for notification handling.
+        """
         result = await self.db.execute(select(User).where(User.email == email.lower()))
         user = result.scalar_one_or_none()
 
@@ -74,12 +99,20 @@ class AuthService:
             if not self._verify_totp(user.totp_secret, totp_code):
                 raise AuthenticationError("Invalid 2FA code")
 
-        user.last_login = datetime.now(UTC)
+        login_time = datetime.now(UTC)
+        user.last_login = login_time
         user.login_count += 1
 
         tokens = self._generate_tokens(user)
 
-        return user, tokens
+        # Capture login metadata for notifications
+        metadata = LoginMetadata(
+            ip_address=ip_address,
+            user_agent=user_agent,
+            login_time=login_time,
+        )
+
+        return user, tokens, metadata
 
     async def refresh_tokens(self, refresh_token: str) -> TokenResponse:
         payload = decode_token(refresh_token)

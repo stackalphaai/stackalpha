@@ -222,6 +222,7 @@ class EmailTemplates:
     WELCOME = "welcome"
     VERIFICATION = "verification"
     PASSWORD_RESET = "password_reset"
+    LOGIN_NOTIFICATION = "login_notification"
     SUBSCRIPTION_ACTIVATED = "subscription_activated"
     SUBSCRIPTION_EXPIRING = "subscription_expiring"
     SUBSCRIPTION_EXPIRED = "subscription_expired"
@@ -240,6 +241,7 @@ EMAIL_SUBJECTS = {
     EmailTemplates.WELCOME: "Welcome to StackAlpha!",
     EmailTemplates.VERIFICATION: "Verify your StackAlpha email address",
     EmailTemplates.PASSWORD_RESET: "Reset your StackAlpha password",
+    EmailTemplates.LOGIN_NOTIFICATION: "New sign-in to your StackAlpha account",
     EmailTemplates.SUBSCRIPTION_ACTIVATED: "Your StackAlpha subscription is active!",
     EmailTemplates.SUBSCRIPTION_EXPIRING: "Your StackAlpha subscription expires in {days_remaining} days",
     EmailTemplates.SUBSCRIPTION_EXPIRED: "Your StackAlpha subscription has expired",

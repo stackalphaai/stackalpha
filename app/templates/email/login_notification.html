@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>New Sign-in Detected</h1>
+
+<p class="lead">Hi {{ name }},</p>
+
+<p>We detected a new sign-in to your StackAlpha account. If this was you, no action is needed.</p>
+
+<div class="info-box {% if is_suspicious %}danger{% else %}info{% endif %}">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0;">
+        <tr>
+            <td style="padding: 12px 0; border-bottom: 1px solid {% if is_suspicious %}#fecaca{% else %}#e2e8f0{% endif %};">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                        <td style="width: 40px; vertical-align: top;">
+                            <div style="width: 32px; height: 32px; background-color: {% if is_suspicious %}#fef2f2{% else %}#eff6ff{% endif %}; border-radius: 50%; text-align: center; line-height: 32px; font-size: 16px;">
+                                &#128205;
+                            </div>
+                        </td>
+                        <td style="vertical-align: top;">
+                            <div style="font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Location</div>
+                            <div style="font-size: 16px; font-weight: 600; color: #111827;">{{ location }}</div>
+                            {% if timezone %}
+                            <div style="font-size: 13px; color: #6b7280; margin-top: 2px;">{{ timezone }}</div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 12px 0; border-bottom: 1px solid {% if is_suspicious %}#fecaca{% else %}#e2e8f0{% endif %};">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                        <td style="width: 40px; vertical-align: top;">
+                            <div style="width: 32px; height: 32px; background-color: {% if is_suspicious %}#fef2f2{% else %}#eff6ff{% endif %}; border-radius: 50%; text-align: center; line-height: 32px; font-size: 16px;">
+                                &#128187;
+                            </div>
+                        </td>
+                        <td style="vertical-align: top;">
+                            <div style="font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Device</div>
+                            <div style="font-size: 16px; font-weight: 600; color: #111827;">{{ device }}</div>
+                            {% if browser and os %}
+                            <div style="font-size: 13px; color: #6b7280; margin-top: 2px;">{{ browser }} on {{ os }}</div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 12px 0; border-bottom: 1px solid {% if is_suspicious %}#fecaca{% else %}#e2e8f0{% endif %};">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                        <td style="width: 40px; vertical-align: top;">
+                            <div style="width: 32px; height: 32px; background-color: {% if is_suspicious %}#fef2f2{% else %}#eff6ff{% endif %}; border-radius: 50%; text-align: center; line-height: 32px; font-size: 16px;">
+                                &#127760;
+                            </div>
+                        </td>
+                        <td style="vertical-align: top;">
+                            <div style="font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">IP Address</div>
+                            <div style="font-size: 16px; font-weight: 600; color: #111827; font-family: 'SF Mono', Monaco, monospace;">{{ ip_address }}</div>
+                            {% if isp %}
+                            <div style="font-size: 13px; color: #6b7280; margin-top: 2px;">{{ isp }}</div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 12px 0;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                        <td style="width: 40px; vertical-align: top;">
+                            <div style="width: 32px; height: 32px; background-color: {% if is_suspicious %}#fef2f2{% else %}#eff6ff{% endif %}; border-radius: 50%; text-align: center; line-height: 32px; font-size: 16px;">
+                                &#128336;
+                            </div>
+                        </td>
+                        <td style="vertical-align: top;">
+                            <div style="font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Date & Time</div>
+                            <div style="font-size: 16px; font-weight: 600; color: #111827;">{{ login_time }}</div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</div>
+
+{% if is_suspicious %}
+<div class="info-box danger" style="margin-top: 24px;">
+    <div style="display: flex; align-items: flex-start;">
+        <span style="font-size: 24px; margin-right: 12px;">&#9888;</span>
+        <div>
+            <div style="font-weight: 600; color: #991b1b; margin-bottom: 4px;">Suspicious Activity Detected</div>
+            <div style="font-size: 14px; color: #7f1d1d;">
+                {% if is_vpn %}This login appears to be from a VPN or proxy service.{% endif %}
+                {% if is_new_location %}This is a new location we haven't seen before.{% endif %}
+                {% if is_new_device %}This is a new device we haven't seen before.{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="divider"></div>
+
+<h2>Wasn't You?</h2>
+
+<p>If you didn't sign in to your account, your password may have been compromised. Take these steps immediately:</p>
+
+<ol>
+    <li><strong>Change your password</strong> - Go to Settings and update your password</li>
+    <li><strong>Enable 2FA</strong> - Add an extra layer of security with two-factor authentication</li>
+    <li><strong>Review activity</strong> - Check your account for any unauthorized changes</li>
+</ol>
+
+<div class="button-container">
+    <a href="https://stackalpha.xyz/settings/security" class="button button-danger">Secure My Account</a>
+</div>
+
+<div class="divider"></div>
+
+<p style="font-size: 14px; color: #6b7280;">
+    <strong>Why am I receiving this?</strong><br>
+    We send login notifications to help you monitor access to your account. You can manage these notifications in your <a href="https://stackalpha.xyz/settings/notifications">notification settings</a>.
+</p>
+
+<p>Stay safe,<br><strong>The StackAlpha Security Team</strong></p>
+{% endblock %}

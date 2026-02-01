@@ -539,6 +539,59 @@ class EmailService:
             name=name,
         )
 
+    async def send_login_notification_email(
+        self,
+        to_email: str,
+        ip_address: str,
+        location: str,
+        device: str,
+        login_time: datetime,
+        browser: str | None = None,
+        os: str | None = None,
+        timezone: str | None = None,
+        isp: str | None = None,
+        is_suspicious: bool = False,
+        is_vpn: bool = False,
+        is_new_location: bool = False,
+        is_new_device: bool = False,
+        name: str | None = None,
+    ) -> bool:
+        """
+        Send login notification email with device and location details.
+
+        This is an enterprise-grade login notification that includes:
+        - Accurate device information (browser, OS, device type)
+        - Geolocation data (city, region, country, timezone)
+        - IP address and ISP information
+        - Suspicious activity flags (VPN, new location, new device)
+        """
+        # Determine subject based on suspicious activity
+        if is_suspicious:
+            subject = "Security Alert: New sign-in to your StackAlpha account"
+        else:
+            subject = "New sign-in to your StackAlpha account"
+
+        return await self.send_template_email(
+            to_email=to_email,
+            template_name=EmailTemplates.LOGIN_NOTIFICATION,
+            context={
+                "ip_address": ip_address,
+                "location": location,
+                "device": device,
+                "login_time": format_datetime(login_time),
+                "browser": browser,
+                "os": os,
+                "timezone": timezone,
+                "isp": isp,
+                "is_suspicious": is_suspicious,
+                "is_vpn": is_vpn,
+                "is_new_location": is_new_location,
+                "is_new_device": is_new_device,
+            },
+            subject=subject,
+            name=name,
+        )
+
 
 # Singleton instance
 _email_service_instance: EmailService | None = None
