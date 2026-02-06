@@ -5,6 +5,7 @@ from app.api.v1 import (
     affiliate,
     analytics,
     auth,
+    risk,
     subscription,
     telegram,
     trading,
@@ -25,3 +26,4 @@ router.include_router(affiliate.router)
 router.include_router(analytics.router)
 router.include_router(admin.router)
 router.include_router(ws.router)
+router.include_router(risk.router)
