@@ -51,7 +51,7 @@
         }
 
         a {
-            color: #6366f1;
+            color: #7c3aed;
             text-decoration: none;
         }
 
@@ -77,32 +77,19 @@
 
         /* Header */
         .email-header {
-            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+            background: linear-gradient(135deg, #5b21b6 0%, #7c3aed 50%, #8b5cf6 100%);
             padding: 40px 40px 35px;
             text-align: center;
         }
 
-        .email-header .logo {
-            font-size: 28px;
-            font-weight: 700;
-            color: #ffffff;
-            letter-spacing: -0.5px;
-            margin: 0;
-        }
-
-        .email-header .logo-icon {
-            display: inline-block;
-            width: 36px;
-            height: 36px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            line-height: 36px;
-            margin-right: 10px;
-            vertical-align: middle;
+        .email-header .logo-img {
+            max-width: 180px;
+            height: auto;
+            margin-bottom: 12px;
         }
 
         .email-header .tagline {
-            color: rgba(255, 255, 255, 0.85);
+            color: rgba(255, 255, 255, 0.9);
             font-size: 14px;
             margin-top: 8px;
             font-weight: 400;
@@ -151,19 +138,19 @@
         .button {
             display: inline-block;
             padding: 16px 40px;
-            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            background: linear-gradient(135deg, #6d28d9 0%, #7c3aed 100%);
             color: #ffffff !important;
             font-size: 16px;
             font-weight: 600;
             text-decoration: none;
             border-radius: 8px;
             transition: all 0.2s ease;
-            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+            box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
         }
 
         .button:hover {
             text-decoration: none;
-            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+            box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45);
         }
 
         .button-secondary {
@@ -212,8 +199,8 @@
         }
 
         .info-box.info {
-            background-color: #eff6ff;
-            border-color: #bfdbfe;
+            background-color: #f5f3ff;
+            border-color: #c4b5fd;
         }
 
         .info-box-title {
@@ -341,14 +328,14 @@
 
         /* Link box */
         .link-box {
-            background-color: #f3f4f6;
+            background-color: #f5f3ff;
             border-radius: 8px;
             padding: 16px;
             margin: 16px 0;
             word-break: break-all;
             font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', monospace;
             font-size: 13px;
-            color: #6366f1;
+            color: #7c3aed;
         }
 
         /* Footer */
@@ -401,6 +388,10 @@
                 padding: 30px 24px;
             }
 
+            .email-header .logo-img {
+                max-width: 150px;
+            }
+
             .email-content {
                 padding: 30px 24px;
             }
@@ -442,9 +433,7 @@
                     <div class="email-container">
                         <!-- Header -->
                         <div class="email-header">
-                            <h1 class="logo">
-                                <span class="logo-icon">&#9650;</span>StackAlpha
-                            </h1>
+                            <img src="https://res.cloudinary.com/deioo5lrm/image/upload/v1769925235/stackalpha_qyuyms.png" alt="StackAlpha" class="logo-img">
                             <p class="tagline">AI-Powered Trading Intelligence</p>
                         </div>
 

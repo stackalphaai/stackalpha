@@ -17,7 +17,7 @@ async def seed_admin():
     async with AsyncSessionLocal() as session:
         # Check if admin already exists
         result = await session.execute(
-            select(User).where(User.email == "admin@stackalpha.com")
+            select(User).where(User.email == "admin@stackalpha.xyz")
         )
         existing_admin = result.scalar_one_or_none()
 
@@ -30,7 +30,7 @@ async def seed_admin():
 
         # Create admin user
         admin_user = User(
-            email="admin@stackalpha.com",
+            email="admin@stackalpha.xyz",
             hashed_password=get_password_hash("admin123"),
             full_name="System Administrator",
             is_active=True,
@@ -43,7 +43,7 @@ async def seed_admin():
         await session.commit()
 
         print("Admin user created successfully!")
-        print("  Email: admin@stackalpha.com")
+        print("  Email: admin@stackalpha.xyz")
         print("  Password: admin123")
         print("  Role: Superadmin")
         print("")

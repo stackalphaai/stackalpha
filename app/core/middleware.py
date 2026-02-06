@@ -26,7 +26,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.requests_limit = requests_limit
         self.window_seconds = window_seconds
         self.redis: aioredis.Redis | None = None
-        self.enabled = settings.app_env != "testing"
+        # Disable rate limiting in development and testing environments
+        self.enabled = settings.app_env == "production"
 
     async def get_redis(self) -> aioredis.Redis:
         if self.redis is None:
@@ -47,10 +48,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not self.enabled:
             return await call_next(request)
 
+        # Skip rate limiting for OPTIONS requests (CORS preflight)
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        # Skip rate limiting for documentation
         if request.url.path.startswith("/docs") or request.url.path.startswith("/openapi"):
             return await call_next(request)
 
+        # Skip rate limiting for webhooks
         if request.url.path.startswith("/api/v1/webhooks"):
+            return await call_next(request)
+
+        # Skip rate limiting for health checks
+        if request.url.path in ("/", "/health", "/api/v1/health"):
             return await call_next(request)
 
         client_ip = self.get_client_ip(request)
@@ -64,8 +75,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 await redis.setex(rate_key, self.window_seconds, 1)
             elif int(current) >= self.requests_limit:
                 logger.warning(f"Rate limit exceeded for IP: {client_ip}")
-                raise RateLimitError(
-                    detail=f"Rate limit exceeded. Try again in {self.window_seconds} seconds."
+                # Return proper JSON response instead of raising exception
+                from starlette.responses import JSONResponse
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "detail": f"Rate limit exceeded. Try again in {self.window_seconds} seconds.",
+                        "error": "rate_limit_exceeded",
+                    },
+                    headers={"Retry-After": str(self.window_seconds)},
                 )
             else:
                 await redis.incr(rate_key)

@@ -10,6 +10,7 @@ from app.api.v1 import (
     trading,
     users,
     wallet,
+    ws,
 )
 
 router = APIRouter(prefix="/v1")
@@ -23,3 +24,4 @@ router.include_router(telegram.router)
 router.include_router(affiliate.router)
 router.include_router(analytics.router)
 router.include_router(admin.router)
+router.include_router(ws.router)

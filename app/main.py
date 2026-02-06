@@ -28,10 +28,22 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Starting StackAlpha Backend...")
 
+    # Start real-time top gainers service
+    from app.services.top_gainers_service import get_top_gainers_service
+
+    top_gainers_service = get_top_gainers_service()
+    await top_gainers_service.start()
+
     logger.info("Application startup complete")
     yield
 
     logger.info("Shutting down StackAlpha Backend...")
+
+    # Stop top gainers service
+    from app.services.top_gainers_service import close_top_gainers_service
+
+    await close_top_gainers_service()
+
     await close_db()
 
     from app.services.hyperliquid import close_hyperliquid_client, close_ws_manager
