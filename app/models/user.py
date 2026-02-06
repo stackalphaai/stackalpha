@@ -11,6 +11,7 @@ from app.database import Base
 if TYPE_CHECKING:
     from app.models.affiliate import Affiliate, AffiliateReferral
     from app.models.notification import TelegramConnection
+    from app.models.risk_settings import RiskSettings
     from app.models.subscription import Subscription
     from app.models.trade import Trade
     from app.models.wallet import Wallet
@@ -74,6 +75,9 @@ class User(Base):
         foreign_keys="AffiliateReferral.referred_user_id",
         back_populates="referred_user",
         uselist=False,
+    )
+    risk_settings: Mapped[Optional["RiskSettings"]] = relationship(
+        "RiskSettings", back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
