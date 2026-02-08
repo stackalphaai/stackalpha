@@ -78,3 +78,15 @@ class APIWalletResponse(BaseSchema):
     address: str
     private_key: str
     message: str = "Store this private key securely. It will not be shown again."
+
+
+class WalletTransferRequest(BaseModel):
+    amount: float = Field(..., gt=0, description="Amount in USDC to transfer")
+    to_perp: bool = Field(True, description="True for Spot -> Perp, False for Perp -> Spot")
+
+
+class WalletTransferResponse(BaseSchema):
+    success: bool
+    message: str
+    amount: float
+    direction: str

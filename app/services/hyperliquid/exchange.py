@@ -298,6 +298,56 @@ class HyperliquidExchangeService:
             slippage=slippage,
         )
 
+    async def usd_transfer(
+        self,
+        private_key: str,
+        amount: float,
+        to_perp: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Transfer USDC between Spot and Perp wallets.
+
+        Args:
+            private_key: Wallet private key for signing
+            amount: Amount in USDC (will be converted to micro-USDC)
+            to_perp: True for Spot -> Perp, False for Perp -> Spot
+
+        Returns:
+            API response from Hyperliquid
+        """
+        nonce = self._get_timestamp()
+
+        # Convert USDC to micro-USDC (1 USDC = 1,000,000 micro-USDC)
+        amount_micro = int(amount * 1_000_000)
+
+        action = {
+            "type": "spotUser",
+            "classTransfer": {
+                "usdc": amount_micro,
+                "toPerp": to_perp,
+            },
+        }
+
+        signature = self._sign_l1_action(private_key, action, nonce)
+
+        payload = {
+            "action": action,
+            "nonce": nonce,
+            "signature": {
+                "r": signature[:66],
+                "s": "0x" + signature[66:130],
+                "v": int(signature[130:], 16),
+            },
+        }
+
+        try:
+            result = await self.client.exchange_request(payload)
+            logger.info(f"USD transfer {'to Perp' if to_perp else 'to Spot'}: {amount} USDC")
+            return result
+        except Exception as e:
+            logger.error(f"Error transferring USD: {str(e)}")
+            raise HyperliquidAPIError(f"Failed to transfer USD: {str(e)}") from e
+
     def _get_asset_index(self, coin: str) -> int:
         coin_index_map = {
             "BTC": 0,

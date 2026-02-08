@@ -74,6 +74,8 @@ from app.schemas.wallet import (
     WalletPositionResponse,
     WalletResponse,
     WalletSyncResponse,
+    WalletTransferRequest,
+    WalletTransferResponse,
 )
 
 __all__ = [
@@ -114,6 +116,8 @@ __all__ = [
     "WalletSyncResponse",
     "EnableTradingRequest",
     "APIWalletResponse",
+    "WalletTransferRequest",
+    "WalletTransferResponse",
     # Trading
     "SignalResponse",
     "SignalDetailResponse",
