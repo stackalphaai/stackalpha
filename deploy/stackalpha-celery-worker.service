@@ -7,11 +7,11 @@ Wants=redis.service
 Type=forking
 User=stackalpha
 Group=stackalpha
-WorkingDirectory=/home/stackalpha/backend
-Environment="PATH=/home/stackalpha/backend/venv/bin:/usr/local/bin:/usr/bin"
-EnvironmentFile=/home/stackalpha/backend/.env
+WorkingDirectory=/home/stackalpha/stackalpha/backend
+Environment="PATH=/home/stackalpha/stackalpha/backend/.venv/bin:/usr/local/bin:/usr/bin"
+EnvironmentFile=/home/stackalpha/stackalpha/backend/.env
 
-ExecStart=/home/stackalpha/backend/venv/bin/celery \
+ExecStart=/home/stackalpha/stackalpha/backend/.venv/bin/celery \
     -A app.workers.celery_app worker \
     --loglevel=info \
     --concurrency=4 \
