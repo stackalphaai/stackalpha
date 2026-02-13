@@ -136,13 +136,15 @@ def setup_cors(app: FastAPI) -> None:
 
 
 def setup_middlewares(app: FastAPI) -> None:
-    setup_cors(app)
-
-    app.add_middleware(SecurityHeadersMiddleware)
-    app.add_middleware(RequestLoggingMiddleware)
+    # Order matters: last added = outermost in the ASGI stack.
+    # CORS must be outermost so ALL responses (including errors from
+    # BaseHTTPMiddleware subclasses) get CORS headers.
     app.add_middleware(
         RateLimitMiddleware,
         redis_url=settings.redis_url,
         requests_limit=settings.rate_limit_requests,
         window_seconds=settings.rate_limit_window_seconds,
     )
+    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
+    setup_cors(app)
