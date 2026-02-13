@@ -5,13 +5,13 @@ Wants=redis.service
 
 [Service]
 Type=forking
-User=stackalpha
-Group=stackalpha
-WorkingDirectory=/home/stackalpha/stackalpha/backend
-Environment="PATH=/home/stackalpha/stackalpha/backend/.venv/bin:/usr/local/bin:/usr/bin"
-EnvironmentFile=/home/stackalpha/stackalpha/backend/.env
+User=alpha
+Group=alpha
+WorkingDirectory=/home/alpha/stackalpha
+Environment="PATH=/home/alpha/stackalpha/.venv/bin:/usr/local/bin:/usr/bin"
+EnvironmentFile=/home/alpha/stackalpha/.env
 
-ExecStart=/home/stackalpha/stackalpha/backend/.venv/bin/celery \
+ExecStart=/home/alpha/stackalpha/.venv/bin/celery \
     -A app.workers.celery_app beat \
     --loglevel=info \
     --logfile=/var/log/stackalpha/celery-beat.log \

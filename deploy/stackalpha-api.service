@@ -5,13 +5,13 @@ Wants=postgresql.service redis.service
 
 [Service]
 Type=notify
-User=stackalpha
-Group=stackalpha
-WorkingDirectory=/home/stackalpha/stackalpha/backend
-Environment="PATH=/home/stackalpha/stackalpha/backend/.venv/bin:/usr/local/bin:/usr/bin"
-EnvironmentFile=/home/stackalpha/stackalpha/backend/.env
+User=alpha
+Group=alpha
+WorkingDirectory=/home/alpha/stackalpha
+Environment="PATH=/home/alpha/stackalpha/.venv/bin:/usr/local/bin:/usr/bin"
+EnvironmentFile=/home/alpha/stackalpha/.env
 
-ExecStart=/home/stackalpha/stackalpha/backend/.venv/bin/gunicorn app.main:app \
+ExecStart=/home/alpha/stackalpha/.venv/bin/gunicorn app.main:app \
     --workers 4 \
     --worker-class uvicorn.workers.UvicornWorker \
     --bind 127.0.0.1:8000 \
@@ -35,7 +35,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/var/log/stackalpha /home/stackalpha/stackalpha/backend
+ReadWritePaths=/var/log/stackalpha /home/alpha/stackalpha
 
 [Install]
 WantedBy=multi-user.target
