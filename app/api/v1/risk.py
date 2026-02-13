@@ -42,7 +42,7 @@ async def get_risk_settings(
     if not settings:
         # Create default settings
         settings = RiskSettings(
-            id=uuid4(),
+            id=str(uuid4()),
             user_id=current_user.id,
             position_sizing_method=PositionSizingMethod.FIXED_PERCENT,
         )
@@ -66,7 +66,7 @@ async def update_risk_settings(
     if not settings:
         # Create if doesn't exist
         settings = RiskSettings(
-            id=uuid4(),
+            id=str(uuid4()),
             user_id=current_user.id,
         )
         db.add(settings)
