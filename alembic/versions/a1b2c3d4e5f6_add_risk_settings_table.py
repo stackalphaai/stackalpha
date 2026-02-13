@@ -21,16 +21,6 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # Create enum type
-    positionsizingmethod = sa.Enum(
-        "fixed_amount",
-        "fixed_percent",
-        "kelly",
-        "risk_parity",
-        name="positionsizingmethod",
-    )
-    positionsizingmethod.create(op.get_bind(), checkfirst=True)
-
     op.create_table(
         "risk_settings",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -44,7 +34,6 @@ def upgrade() -> None:
                 "kelly",
                 "risk_parity",
                 name="positionsizingmethod",
-                create_type=False,
             ),
             nullable=False,
         ),
