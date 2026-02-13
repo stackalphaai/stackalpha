@@ -90,7 +90,9 @@ async def get_affiliate_dashboard(
                 id=r.id,
                 referred_user_email=r.referred_user.email if r.referred_user else "Unknown",
                 referred_user_full_name=r.referred_user.full_name if r.referred_user else None,
-                referred_user_has_active_subscription=r.referred_user.has_active_subscription if r.referred_user else False,
+                referred_user_has_active_subscription=r.referred_user.has_active_subscription
+                if r.referred_user
+                else False,
                 is_converted=r.is_converted,
                 converted_at=r.converted_at,
                 created_at=r.created_at,
@@ -178,7 +180,9 @@ async def get_referrals(
                 id=r.id,
                 referred_user_email=r.referred_user.email if r.referred_user else "Unknown",
                 referred_user_full_name=r.referred_user.full_name if r.referred_user else None,
-                referred_user_has_active_subscription=r.referred_user.has_active_subscription if r.referred_user else False,
+                referred_user_has_active_subscription=r.referred_user.has_active_subscription
+                if r.referred_user
+                else False,
                 is_converted=r.is_converted,
                 converted_at=r.converted_at,
                 created_at=r.created_at,
