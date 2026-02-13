@@ -49,9 +49,7 @@ class NotificationChannel(str, Enum):
 class TelegramConnection(Base):
     __tablename__ = "telegram_connections"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=generate_uuid, index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, index=True)
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
     )
@@ -89,9 +87,7 @@ class TelegramConnection(Base):
 class Notification(Base):
     __tablename__ = "notifications"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=generate_uuid, index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, index=True)
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -127,9 +123,7 @@ class Notification(Base):
 class EmailTemplate(Base):
     __tablename__ = "email_templates"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=generate_uuid, index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, index=True)
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     body_html: Mapped[str] = mapped_column(Text, nullable=False)

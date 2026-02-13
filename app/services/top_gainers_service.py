@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from fastapi import WebSocket
@@ -78,9 +78,7 @@ class TopGainersService:
         self._stats_refresh_task = asyncio.create_task(self._stats_refresh_loop())
         self._broadcast_task = asyncio.create_task(self._broadcast_loop())
 
-        logger.info(
-            f"TopGainersService started. Tracking {len(self._coins)} coins."
-        )
+        logger.info(f"TopGainersService started. Tracking {len(self._coins)} coins.")
 
     async def stop(self):
         """Stop the top gainers service."""
@@ -113,9 +111,7 @@ class TopGainersService:
     async def register_client(self, websocket: WebSocket):
         """Register a new WebSocket client."""
         self._connected_clients.add(websocket)
-        logger.info(
-            f"Client connected. Total clients: {len(self._connected_clients)}"
-        )
+        logger.info(f"Client connected. Total clients: {len(self._connected_clients)}")
 
         # Send current state immediately
         data = self._build_payload()
@@ -127,9 +123,7 @@ class TopGainersService:
     def unregister_client(self, websocket: WebSocket):
         """Unregister a disconnected WebSocket client."""
         self._connected_clients.discard(websocket)
-        logger.info(
-            f"Client disconnected. Total clients: {len(self._connected_clients)}"
-        )
+        logger.info(f"Client disconnected. Total clients: {len(self._connected_clients)}")
 
     async def _refresh_market_stats(self):
         """Fetch metaAndAssetCtxs from Hyperliquid REST API to get 24h stats."""
@@ -268,18 +262,14 @@ class TopGainersService:
         coins = [c for c in coins if c.mid_price > 0 and c.prev_day_price > 0]
 
         # Sort by 24h change percentage descending
-        sorted_by_change = sorted(
-            coins, key=lambda c: c.day_change_pct, reverse=True
-        )
+        sorted_by_change = sorted(coins, key=lambda c: c.day_change_pct, reverse=True)
 
         top_gainers = [c.to_dict() for c in sorted_by_change[:20]]
         top_losers = [c.to_dict() for c in sorted_by_change[-20:]]
         top_losers.reverse()  # Most negative first
 
         # Top by volume
-        sorted_by_volume = sorted(
-            coins, key=lambda c: c.volume_24h, reverse=True
-        )
+        sorted_by_volume = sorted(coins, key=lambda c: c.volume_24h, reverse=True)
         top_volume = [c.to_dict() for c in sorted_by_volume[:20]]
 
         payload = {

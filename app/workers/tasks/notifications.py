@@ -762,9 +762,9 @@ async def _send_telegram_notification(
 ) -> bool:
     from sqlalchemy import select
 
-    from app.workers.database import get_worker_db
     from app.models import TelegramConnection
     from app.services.telegram_service import TelegramService
+    from app.workers.database import get_worker_db
 
     async with get_worker_db() as db:
         result = await db.execute(
@@ -828,10 +828,10 @@ async def _send_renewal_reminders() -> int:
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
-    from app.workers.database import get_worker_db
     from app.models import Subscription, SubscriptionStatus
     from app.services.email_service import get_email_service
     from app.services.telegram_service import TelegramService
+    from app.workers.database import get_worker_db
 
     now = datetime.now(UTC)
     reminder_threshold = now + timedelta(days=3)
@@ -914,9 +914,9 @@ async def _send_expired_subscription_emails() -> int:
     from sqlalchemy.orm import selectinload
 
     from app.config import settings
-    from app.workers.database import get_worker_db
     from app.models import Subscription, SubscriptionStatus
     from app.services.email_service import get_email_service
+    from app.workers.database import get_worker_db
 
     now = datetime.now(UTC)
     yesterday = now - timedelta(days=1)
@@ -977,8 +977,8 @@ def broadcast_notification_task(
 
 
 async def _broadcast_notification(message: str, notification_type: str) -> int:
-    from app.workers.database import get_worker_db
     from app.services.telegram_service import TelegramService
+    from app.workers.database import get_worker_db
 
     async with get_worker_db() as db:
         telegram_service = TelegramService(db)
@@ -1006,8 +1006,8 @@ def cleanup_old_notifications(self, days: int = 30) -> int:
 async def _cleanup_old_notifications(days: int) -> int:
     from sqlalchemy import delete
 
-    from app.workers.database import get_worker_db
     from app.models import Notification
+    from app.workers.database import get_worker_db
 
     cutoff = datetime.now(UTC) - timedelta(days=days)
 

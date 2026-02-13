@@ -16,8 +16,8 @@ def sync_all_positions(self):
 
 
 async def _sync_all_positions():
-    from app.workers.database import get_worker_db
     from app.services.trading import PositionSyncService
+    from app.workers.database import get_worker_db
 
     async with get_worker_db() as db:
         sync_service = PositionSyncService(db)
@@ -53,10 +53,10 @@ async def _execute_trade(
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
-    from app.workers.database import get_worker_db
     from app.models import Signal, User, Wallet
     from app.services.telegram_service import TelegramService
     from app.services.trading import TradeExecutor
+    from app.workers.database import get_worker_db
 
     async with get_worker_db() as db:
         result = await db.execute(
@@ -105,10 +105,10 @@ async def _close_trade(trade_id: str, reason: str):
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
-    from app.workers.database import get_worker_db
     from app.models import Trade, TradeCloseReason, User, Wallet
     from app.services.telegram_service import TelegramService
     from app.services.trading import TradeExecutor
+    from app.workers.database import get_worker_db
 
     async with get_worker_db() as db:
         result = await db.execute(
@@ -156,9 +156,9 @@ def monitor_tp_sl(self, trade_id: str):
 async def _monitor_tp_sl(trade_id: str):
     from sqlalchemy import select
 
-    from app.workers.database import get_worker_db
     from app.models import Trade, TradeCloseReason, TradeDirection, TradeStatus
     from app.services.hyperliquid import get_info_service
+    from app.workers.database import get_worker_db
 
     async with get_worker_db() as db:
         result = await db.execute(select(Trade).where(Trade.id == trade_id))

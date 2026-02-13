@@ -17,8 +17,8 @@ def check_subscriptions(self):
 
 
 async def _check_subscriptions():
-    from app.workers.database import get_worker_db
     from app.services import PaymentService
+    from app.workers.database import get_worker_db
 
     async with get_worker_db() as db:
         payment_service = PaymentService(db)
@@ -38,8 +38,8 @@ def expire_old_signals(self):
 
 
 async def _expire_old_signals():
-    from app.workers.database import get_worker_db
     from app.services.trading import SignalService
+    from app.workers.database import get_worker_db
 
     async with get_worker_db() as db:
         signal_service = SignalService(db)
@@ -63,8 +63,8 @@ async def _cleanup_old_notifications():
 
     from sqlalchemy import delete
 
-    from app.workers.database import get_worker_db
     from app.models import Notification
+    from app.workers.database import get_worker_db
 
     cutoff = datetime.now(UTC) - timedelta(days=30)
 
@@ -93,9 +93,9 @@ def sync_wallet_balances(self):
 async def _sync_wallet_balances():
     from sqlalchemy import select
 
-    from app.workers.database import get_worker_db
     from app.models import Wallet, WalletStatus
     from app.services.trading import PositionSyncService
+    from app.workers.database import get_worker_db
 
     async with get_worker_db() as db:
         result = await db.execute(
@@ -133,8 +133,8 @@ async def _generate_daily_report():
 
     from sqlalchemy import func, select
 
-    from app.workers.database import get_worker_db
     from app.models import Payment, PaymentStatus, Signal, Trade, TradeStatus, User
+    from app.workers.database import get_worker_db
 
     yesterday = datetime.now(UTC) - timedelta(days=1)
 

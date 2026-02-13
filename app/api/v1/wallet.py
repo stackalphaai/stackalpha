@@ -242,7 +242,7 @@ async def transfer_usd(
     # Execute the transfer
     exchange_service = get_exchange_service()
     try:
-        result = await exchange_service.usd_transfer(
+        await exchange_service.usd_transfer(
             private_key=private_key,
             amount=data.amount,
             to_perp=data.to_perp,

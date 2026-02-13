@@ -37,9 +37,7 @@ class PayoutStatus(str, Enum):
 class Affiliate(Base):
     __tablename__ = "affiliates"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=generate_uuid, index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, index=True)
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
     )
@@ -86,9 +84,7 @@ class Affiliate(Base):
 class AffiliateReferral(Base):
     __tablename__ = "affiliate_referrals"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=generate_uuid, index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, index=True)
     affiliate_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("affiliates.id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -118,9 +114,7 @@ class AffiliateReferral(Base):
 class AffiliateCommission(Base):
     __tablename__ = "affiliate_commissions"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=generate_uuid, index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, index=True)
     affiliate_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("affiliates.id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -151,9 +145,7 @@ class AffiliateCommission(Base):
 class AffiliatePayout(Base):
     __tablename__ = "affiliate_payouts"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=generate_uuid, index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, index=True)
     affiliate_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("affiliates.id", ondelete="CASCADE"), nullable=False, index=True
     )

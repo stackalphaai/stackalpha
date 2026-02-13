@@ -18,11 +18,11 @@ def analyze_all_markets(self):
 async def _analyze_all_markets():
     from sqlalchemy import select
 
-    from app.workers.database import get_worker_db
     from app.models import TelegramConnection
     from app.services.hyperliquid import get_info_service
     from app.services.telegram_service import TelegramService
     from app.services.trading import SignalService
+    from app.workers.database import get_worker_db
 
     logger.info("Starting market analysis...")
 
@@ -91,8 +91,8 @@ def analyze_single_market(self, symbol: str):
 
 
 async def _analyze_single_market(symbol: str):
-    from app.workers.database import get_worker_db
     from app.services.trading import SignalService
+    from app.workers.database import get_worker_db
 
     async with get_worker_db() as db:
         signal_service = SignalService(db)

@@ -82,8 +82,18 @@ def parse_user_agent(user_agent: str | None) -> DeviceInfo:
 
     # Detect bots
     bot_patterns = [
-        r"bot", r"crawler", r"spider", r"scraper", r"curl", r"wget",
-        r"python", r"java", r"perl", r"ruby", r"php", r"http"
+        r"bot",
+        r"crawler",
+        r"spider",
+        r"scraper",
+        r"curl",
+        r"wget",
+        r"python",
+        r"java",
+        r"perl",
+        r"ruby",
+        r"php",
+        r"http",
     ]
     user_agent_lower = user_agent.lower()
     if any(pattern in user_agent_lower for pattern in bot_patterns):

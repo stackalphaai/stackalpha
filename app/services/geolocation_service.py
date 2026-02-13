@@ -106,13 +106,17 @@ class GeolocationService:
                 )
 
                 if response.status_code != 200:
-                    logger.warning(f"Geolocation API error for {ip_address}: {response.status_code}")
+                    logger.warning(
+                        f"Geolocation API error for {ip_address}: {response.status_code}"
+                    )
                     return GeoLocation(ip=ip_address)
 
                 data = response.json()
 
                 if data.get("status") != "success":
-                    logger.warning(f"Geolocation lookup failed for {ip_address}: {data.get('message')}")
+                    logger.warning(
+                        f"Geolocation lookup failed for {ip_address}: {data.get('message')}"
+                    )
                     return GeoLocation(ip=ip_address)
 
                 location = GeoLocation(

@@ -1,4 +1,5 @@
 """Risk Management Settings Model"""
+
 from datetime import datetime
 from enum import Enum as PyEnum
 
@@ -38,16 +39,12 @@ class RiskSettings(Base):
     )
 
     # Portfolio Limits
-    max_portfolio_heat: Mapped[float] = mapped_column(
-        Numeric(5, 2), nullable=False, default=50.0
-    )
+    max_portfolio_heat: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False, default=50.0)
     max_open_positions: Mapped[int] = mapped_column(nullable=False, default=5)
     max_leverage: Mapped[int] = mapped_column(nullable=False, default=10)
 
     # Drawdown Limits
-    max_daily_loss_usd: Mapped[float] = mapped_column(
-        Numeric(12, 2), nullable=False, default=500.0
-    )
+    max_daily_loss_usd: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=500.0)
     max_daily_loss_percent: Mapped[float] = mapped_column(
         Numeric(5, 2), nullable=False, default=5.0
     )
@@ -59,9 +56,7 @@ class RiskSettings(Base):
     )
 
     # Risk-Reward
-    min_risk_reward_ratio: Mapped[float] = mapped_column(
-        Numeric(4, 2), nullable=False, default=1.5
-    )
+    min_risk_reward_ratio: Mapped[float] = mapped_column(Numeric(4, 2), nullable=False, default=1.5)
 
     # Diversification
     max_correlated_positions: Mapped[int] = mapped_column(nullable=False, default=2)
@@ -75,14 +70,10 @@ class RiskSettings(Base):
 
     # Auto-Trading Features
     enable_trailing_stop: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    trailing_stop_percent: Mapped[float] = mapped_column(
-        Numeric(5, 2), nullable=False, default=1.5
-    )
+    trailing_stop_percent: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False, default=1.5)
     enable_scale_out: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     enable_pyramiding: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    min_signal_confidence: Mapped[float] = mapped_column(
-        Numeric(3, 2), nullable=False, default=0.7
-    )
+    min_signal_confidence: Mapped[float] = mapped_column(Numeric(3, 2), nullable=False, default=0.7)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

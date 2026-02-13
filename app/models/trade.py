@@ -56,9 +56,7 @@ class TradeCloseReason(str, Enum):
 class Trade(Base):
     __tablename__ = "trades"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=generate_uuid, index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, index=True)
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )

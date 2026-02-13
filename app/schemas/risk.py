@@ -1,4 +1,5 @@
 """Risk Management Schemas"""
+
 from pydantic import BaseModel, Field
 
 

@@ -50,11 +50,13 @@ class AdminAuth(AuthenticationBackend):
 
             if user and verify_password(str(password), user.hashed_password):
                 if user.is_admin or user.is_superadmin:
-                    request.session.update({
-                        "admin_user_id": user.id,
-                        "admin_email": user.email,
-                        "is_superadmin": user.is_superadmin,
-                    })
+                    request.session.update(
+                        {
+                            "admin_user_id": user.id,
+                            "admin_email": user.email,
+                            "is_superadmin": user.is_superadmin,
+                        }
+                    )
                     return True
 
         return False

@@ -8,7 +8,6 @@ from redis import asyncio as aioredis
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
-from app.core.exceptions import RateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +76,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 logger.warning(f"Rate limit exceeded for IP: {client_ip}")
                 # Return proper JSON response instead of raising exception
                 from starlette.responses import JSONResponse
+
                 return JSONResponse(
                     status_code=429,
                     content={

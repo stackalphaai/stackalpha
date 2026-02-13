@@ -16,9 +16,7 @@ async def seed_admin():
     """Create default admin user if not exists."""
     async with AsyncSessionLocal() as session:
         # Check if admin already exists
-        result = await session.execute(
-            select(User).where(User.email == "admin@stackalpha.xyz")
-        )
+        result = await session.execute(select(User).where(User.email == "admin@stackalpha.xyz"))
         existing_admin = result.scalar_one_or_none()
 
         if existing_admin:

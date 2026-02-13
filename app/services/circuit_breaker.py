@@ -7,6 +7,7 @@ Provides kill switch and safety mechanisms to protect capital:
 - System health monitoring
 - Automatic triggers based on risk events
 """
+
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -15,7 +16,7 @@ from enum import Enum
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Trade, TradeStatus, User
+from app.models import Trade, TradeStatus
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +66,7 @@ class CircuitBreakerService:
     async def get_state(self, user_id: str) -> CircuitBreakerState:
         """Get current circuit breaker state for user"""
         if user_id not in self._state:
-            self._state[user_id] = CircuitBreakerState(
-                status=CircuitBreakerStatus.ACTIVE
-            )
+            self._state[user_id] = CircuitBreakerState(status=CircuitBreakerStatus.ACTIVE)
         return self._state[user_id]
 
     async def is_trading_allowed(self, user_id: str) -> tuple[bool, str | None]:
@@ -118,15 +117,11 @@ class CircuitBreakerService:
         if duration_seconds:
             from datetime import timedelta
 
-            state.auto_resume_at = datetime.utcnow() + timedelta(
-                seconds=duration_seconds
-            )
+            state.auto_resume_at = datetime.utcnow() + timedelta(seconds=duration_seconds)
         else:
             state.auto_resume_at = None
 
-        logger.warning(
-            f"Trading paused for user {user_id} by {paused_by}: {reason}"
-        )
+        logger.warning(f"Trading paused for user {user_id} by {paused_by}: {reason}")
 
         # TODO: Send Telegram notification
         # await self._notify_user(user_id, f"⚠️ Trading Paused: {reason}")
@@ -138,9 +133,7 @@ class CircuitBreakerService:
         state = await self.get_state(user_id)
 
         if state.status == CircuitBreakerStatus.KILLED:
-            logger.warning(
-                f"Cannot resume - kill switch active for user {user_id}"
-            )
+            logger.warning(f"Cannot resume - kill switch active for user {user_id}")
             raise ValueError("Cannot resume while kill switch is active")
 
         state.status = CircuitBreakerStatus.ACTIVE
@@ -156,9 +149,7 @@ class CircuitBreakerService:
 
         return state
 
-    async def kill_switch(
-        self, user_id: str, close_positions: bool = True
-    ) -> CircuitBreakerState:
+    async def kill_switch(self, user_id: str, close_positions: bool = True) -> CircuitBreakerState:
         """
         EMERGENCY: Stop all trading and optionally close positions.
 
@@ -184,9 +175,7 @@ class CircuitBreakerService:
             )
             open_trades = list(open_trades_result.scalars().all())
 
-            logger.info(
-                f"Closing {len(open_trades)} open positions for user {user_id}"
-            )
+            logger.info(f"Closing {len(open_trades)} open positions for user {user_id}")
 
             for trade in open_trades:
                 trade.status = TradeStatus.CLOSING
@@ -257,9 +246,7 @@ class CircuitBreakerService:
 
         return state
 
-    async def update_system_health(
-        self, health: SystemHealth, reason: str | None = None
-    ) -> None:
+    async def update_system_health(self, health: SystemHealth, reason: str | None = None) -> None:
         """
         Update global system health status.
 
@@ -280,9 +267,7 @@ class CircuitBreakerService:
                 health == SystemHealth.CRITICAL
                 and self._state[user_id].status == CircuitBreakerStatus.ACTIVE
             ):
-                await self.pause_trading(
-                    user_id, f"System health critical: {reason}"
-                )
+                await self.pause_trading(user_id, f"System health critical: {reason}")
 
     async def get_statistics(self, user_id: str) -> dict:
         """Get circuit breaker statistics"""
@@ -300,18 +285,10 @@ class CircuitBreakerService:
         return {
             "status": state.status.value,
             "system_health": state.system_health.value,
-            "trading_allowed": (
-                await self.is_trading_allowed(user_id)
-            )[0],
+            "trading_allowed": (await self.is_trading_allowed(user_id))[0],
             "paused_reason": state.paused_reason,
-            "paused_at": (
-                state.paused_at.isoformat() if state.paused_at else None
-            ),
+            "paused_at": (state.paused_at.isoformat() if state.paused_at else None),
             "paused_by": state.paused_by,
-            "auto_resume_at": (
-                state.auto_resume_at.isoformat()
-                if state.auto_resume_at
-                else None
-            ),
+            "auto_resume_at": (state.auto_resume_at.isoformat() if state.auto_resume_at else None),
             "open_positions_count": open_positions,
         }

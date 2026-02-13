@@ -50,9 +50,7 @@ class SignalOutcome(str, Enum):
 class Signal(Base):
     __tablename__ = "signals"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=generate_uuid, index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, index=True)
 
     symbol: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     direction: Mapped[SignalDirection] = mapped_column(SQLEnum(SignalDirection), nullable=False)

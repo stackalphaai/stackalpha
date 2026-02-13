@@ -1,4 +1,5 @@
 """Risk Management and Circuit Breaker API Endpoints"""
+
 import logging
 from typing import Annotated
 from uuid import uuid4
@@ -35,9 +36,7 @@ async def get_risk_settings(
     db: DB,
 ):
     """Get user's risk management settings"""
-    result = await db.execute(
-        select(RiskSettings).where(RiskSettings.user_id == current_user.id)
-    )
+    result = await db.execute(select(RiskSettings).where(RiskSettings.user_id == current_user.id))
     settings = result.scalar_one_or_none()
 
     if not settings:
@@ -61,9 +60,7 @@ async def update_risk_settings(
     db: DB,
 ):
     """Update risk management settings"""
-    result = await db.execute(
-        select(RiskSettings).where(RiskSettings.user_id == current_user.id)
-    )
+    result = await db.execute(select(RiskSettings).where(RiskSettings.user_id == current_user.id))
     settings = result.scalar_one_or_none()
 
     if not settings:
@@ -116,9 +113,7 @@ async def calculate_position_size(
 
 
 # Circuit Breaker Endpoints
-circuit_breaker_router = APIRouter(
-    prefix="/circuit-breaker", tags=["Circuit Breaker"]
-)
+circuit_breaker_router = APIRouter(prefix="/circuit-breaker", tags=["Circuit Breaker"])
 
 
 @circuit_breaker_router.get("/status", response_model=CircuitBreakerStatusResponse)
@@ -140,7 +135,7 @@ async def pause_trading(
 ):
     """Pause trading (manual)"""
     service = CircuitBreakerService(db)
-    state = await service.pause_trading(
+    await service.pause_trading(
         user_id=str(current_user.id),
         reason=data.reason,
         paused_by=str(current_user.id),
@@ -172,9 +167,7 @@ async def activate_kill_switch(
 ):
     """🚨 EMERGENCY: Activate kill switch"""
     service = CircuitBreakerService(db)
-    await service.kill_switch(
-        user_id=str(current_user.id), close_positions=close_positions
-    )
+    await service.kill_switch(user_id=str(current_user.id), close_positions=close_positions)
 
     stats = await service.get_statistics(str(current_user.id))
     return stats

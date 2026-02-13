@@ -156,7 +156,9 @@ class PaymentService:
                 payment.nowpayments_id = str(payload.payment_id)
 
         if not payment:
-            logger.warning(f"Payment not found: payment_id={payload.payment_id}, order_id={payload.order_id}")
+            logger.warning(
+                f"Payment not found: payment_id={payload.payment_id}, order_id={payload.order_id}"
+            )
             raise BadRequestError("Payment not found")
 
         old_status = payment.status

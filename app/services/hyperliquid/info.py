@@ -108,7 +108,9 @@ class HyperliquidInfoService:
                 mark_price = float(ctx.get("markPx", 0))
                 price_change_percent = float(ctx.get("dayChg", 0)) if ctx.get("dayChg") else 0
                 prev_price = float(ctx.get("prevDayPx", 0)) if ctx.get("prevDayPx") else 0
-                price_change = mark_price - prev_price if prev_price else mark_price * price_change_percent
+                price_change = (
+                    mark_price - prev_price if prev_price else mark_price * price_change_percent
+                )
 
                 return {
                     "symbol": symbol,
@@ -138,7 +140,9 @@ class HyperliquidInfoService:
             mark_price = float(ctx.get("markPx", 0))
             price_change_percent = float(ctx.get("dayChg", 0)) if ctx.get("dayChg") else 0
             prev_price = float(ctx.get("prevDayPx", 0)) if ctx.get("prevDayPx") else 0
-            price_change = mark_price - prev_price if prev_price else mark_price * price_change_percent
+            price_change = (
+                mark_price - prev_price if prev_price else mark_price * price_change_percent
+            )
 
             markets.append(
                 {

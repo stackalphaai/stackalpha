@@ -9,16 +9,16 @@ Implements professional risk management strategies:
 - Correlation analysis
 - Diversification requirements
 """
+
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from decimal import Decimal
 from enum import Enum
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Trade, TradeStatus, User
+from app.models import Trade, TradeStatus
 
 logger = logging.getLogger(__name__)
 
@@ -123,9 +123,7 @@ class RiskManagementService:
         open_trades = list(open_trades_result.scalars().all())
 
         # Get today's closed trades for P&L
-        today_start = datetime.utcnow().replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         today_pnl_result = await self.db.execute(
             select(func.sum(Trade.realized_pnl)).where(
                 Trade.user_id == user_id,
@@ -187,16 +185,12 @@ class RiskManagementService:
             for t in open_trades
             if t.entry_price and t.stop_loss_price
         )
-        portfolio_heat = (
-            (total_risk / total_equity * 100) if total_equity > 0 else 0
-        )
+        portfolio_heat = (total_risk / total_equity * 100) if total_equity > 0 else 0
 
         # Margin utilization
         # Assume max margin is 10x total equity (conservative)
         max_margin = total_equity * 10
-        margin_utilization = (
-            (total_margin / max_margin * 100) if max_margin > 0 else 0
-        )
+        margin_utilization = (total_margin / max_margin * 100) if max_margin > 0 else 0
 
         return PortfolioMetrics(
             total_equity=total_equity,
@@ -306,9 +300,7 @@ class RiskManagementService:
             )
 
         elif limits.position_sizing_method == PositionSizingMethod.FIXED_PERCENT:
-            position_size_usd = (
-                metrics.total_equity * limits.max_position_size_percent / 100
-            )
+            position_size_usd = metrics.total_equity * limits.max_position_size_percent / 100
 
         elif limits.position_sizing_method == PositionSizingMethod.KELLY_CRITERION:
             # Kelly = (Win% * Avg Win - Loss% * Avg Loss) / Avg Win
@@ -327,9 +319,7 @@ class RiskManagementService:
             # Size based on volatility (inversely proportional to risk)
             # Higher risk = smaller position
             target_risk_percent = 1.0  # 1% risk per trade
-            position_size_usd = (
-                metrics.total_equity * target_risk_percent / 100
-            ) / risk_percent
+            position_size_usd = (metrics.total_equity * target_risk_percent / 100) / risk_percent
 
         # Apply hard limits
         position_size_usd = min(
@@ -339,9 +329,7 @@ class RiskManagementService:
         )
 
         position_size_percent = (
-            position_size_usd / metrics.total_equity * 100
-            if metrics.total_equity > 0
-            else 0
+            position_size_usd / metrics.total_equity * 100 if metrics.total_equity > 0 else 0
         )
 
         # Calculate risk amount
@@ -400,9 +388,7 @@ class RiskManagementService:
         if metrics.daily_pnl < 0:
             daily_loss_usd = abs(metrics.daily_pnl)
             daily_loss_percent = (
-                daily_loss_usd / metrics.total_equity * 100
-                if metrics.total_equity > 0
-                else 0
+                daily_loss_usd / metrics.total_equity * 100 if metrics.total_equity > 0 else 0
             )
 
             if daily_loss_usd >= limits.max_daily_loss_usd:
@@ -430,9 +416,7 @@ class RiskManagementService:
             return False, f"Position too large: ${position_size_usd:.2f}"
 
         position_percent = (
-            position_size_usd / metrics.total_equity * 100
-            if metrics.total_equity > 0
-            else 0
+            position_size_usd / metrics.total_equity * 100 if metrics.total_equity > 0 else 0
         )
         if position_percent > limits.max_position_size_percent:
             return False, f"Position % too large: {position_percent:.2f}%"
