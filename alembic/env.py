@@ -16,6 +16,7 @@ from app.models import (  # noqa: F401
     EmailTemplate,
     Notification,
     Payment,
+    RiskSettings,
     Signal,
     Subscription,
     TelegramConnection,

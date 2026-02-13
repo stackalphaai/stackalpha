@@ -12,6 +12,7 @@ from app.models.notification import (
     NotificationType,
     TelegramConnection,
 )
+from app.models.risk_settings import PositionSizingMethod, RiskSettings
 from app.models.signal import Signal, SignalDirection, SignalOutcome, SignalStatus
 from app.models.subscription import (
     Payment,
@@ -59,4 +60,7 @@ __all__ = [
     "NotificationChannel",
     "TelegramConnection",
     "EmailTemplate",
+    # Risk Settings
+    "RiskSettings",
+    "PositionSizingMethod",
 ]
