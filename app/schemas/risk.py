@@ -2,8 +2,10 @@
 
 from pydantic import BaseModel, Field
 
+from app.schemas.common import BaseSchema
 
-class RiskSettingsResponse(BaseModel):
+
+class RiskSettingsResponse(BaseSchema):
     # Position Sizing
     position_sizing_method: str
     max_position_size_usd: float
@@ -37,9 +39,6 @@ class RiskSettingsResponse(BaseModel):
     enable_scale_out: bool
     enable_pyramiding: bool
     min_signal_confidence: float
-
-    class Config:
-        from_attributes = True
 
 
 class UpdateRiskSettingsRequest(BaseModel):
@@ -78,7 +77,7 @@ class UpdateRiskSettingsRequest(BaseModel):
     min_signal_confidence: float | None = Field(None, ge=0, le=1)
 
 
-class PortfolioMetricsResponse(BaseModel):
+class PortfolioMetricsResponse(BaseSchema):
     total_equity: float
     total_margin_used: float
     total_unrealized_pnl: float
@@ -100,7 +99,7 @@ class PositionSizeRequest(BaseModel):
     signal_confidence: float = Field(default=0.7, ge=0, le=1)
 
 
-class PositionSizeResponse(BaseModel):
+class PositionSizeResponse(BaseSchema):
     position_size_usd: float
     position_size_percent: float
     risk_amount: float
@@ -108,7 +107,7 @@ class PositionSizeResponse(BaseModel):
     rejection_reason: str | None = None
 
 
-class CircuitBreakerStatusResponse(BaseModel):
+class CircuitBreakerStatusResponse(BaseSchema):
     status: str  # "active", "paused", "killed"
     system_health: str  # "healthy", "degraded", "critical", "offline"
     trading_allowed: bool

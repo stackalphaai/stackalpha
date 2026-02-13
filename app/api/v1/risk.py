@@ -30,6 +30,36 @@ router = APIRouter(prefix="/risk", tags=["Risk Management"])
 DB = Annotated[AsyncSession, Depends(get_db)]
 
 
+def _serialize_risk_settings(settings: RiskSettings) -> RiskSettingsResponse:
+    """Explicitly serialize RiskSettings ORM object to response schema."""
+    return RiskSettingsResponse(
+        position_sizing_method=(
+            settings.position_sizing_method.value
+            if hasattr(settings.position_sizing_method, "value")
+            else str(settings.position_sizing_method)
+        ),
+        max_position_size_usd=float(settings.max_position_size_usd),
+        max_position_size_percent=float(settings.max_position_size_percent),
+        max_portfolio_heat=float(settings.max_portfolio_heat),
+        max_open_positions=settings.max_open_positions,
+        max_leverage=settings.max_leverage,
+        max_daily_loss_usd=float(settings.max_daily_loss_usd),
+        max_daily_loss_percent=float(settings.max_daily_loss_percent),
+        max_weekly_loss_percent=float(settings.max_weekly_loss_percent),
+        max_monthly_loss_percent=float(settings.max_monthly_loss_percent),
+        min_risk_reward_ratio=float(settings.min_risk_reward_ratio),
+        max_correlated_positions=settings.max_correlated_positions,
+        max_single_asset_exposure_percent=float(settings.max_single_asset_exposure_percent),
+        max_consecutive_losses=settings.max_consecutive_losses,
+        trading_paused=settings.trading_paused,
+        enable_trailing_stop=settings.enable_trailing_stop,
+        trailing_stop_percent=float(settings.trailing_stop_percent),
+        enable_scale_out=settings.enable_scale_out,
+        enable_pyramiding=settings.enable_pyramiding,
+        min_signal_confidence=float(settings.min_signal_confidence),
+    )
+
+
 @router.get("/settings", response_model=RiskSettingsResponse)
 async def get_risk_settings(
     current_user: CurrentUser,
@@ -50,7 +80,7 @@ async def get_risk_settings(
         await db.commit()
         await db.refresh(settings)
 
-    return settings
+    return _serialize_risk_settings(settings)
 
 
 @router.patch("/settings", response_model=RiskSettingsResponse)
@@ -80,7 +110,7 @@ async def update_risk_settings(
     await db.refresh(settings)
 
     logger.info(f"Risk settings updated for user {current_user.id}")
-    return settings
+    return _serialize_risk_settings(settings)
 
 
 @router.get("/portfolio-metrics", response_model=PortfolioMetricsResponse)
