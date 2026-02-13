@@ -94,7 +94,7 @@ async def get_authorization_message(
 
 @router.post("/generate-api-wallet", response_model=APIWalletResponse)
 async def generate_api_wallet(
-    current_user: SubscribedUser,
+    current_user: CurrentUser,
     db: DB,
 ):
     wallet_service = WalletService(db)
