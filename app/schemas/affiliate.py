@@ -38,6 +38,8 @@ class AffiliateResponse(AffiliateBase, TimestampMixin):
 class AffiliateReferralResponse(BaseSchema):
     id: str
     referred_user_email: str
+    referred_user_full_name: str | None = None
+    referred_user_has_active_subscription: bool = False
     is_converted: bool
     converted_at: datetime | None = None
     created_at: datetime
@@ -48,6 +50,8 @@ class AffiliateCommissionResponse(BaseSchema):
     amount: float
     commission_rate: float
     original_amount: float
+    status: str
+    source: str
     is_paid: bool
     paid_at: datetime | None = None
     created_at: datetime

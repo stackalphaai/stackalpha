@@ -280,7 +280,9 @@ class AffiliateService:
     ) -> tuple[list[AffiliateReferral], int]:
         query = (
             select(AffiliateReferral)
-            .options(selectinload(AffiliateReferral.referred_user))
+            .options(
+                selectinload(AffiliateReferral.referred_user).selectinload(User.subscriptions)
+            )
             .where(AffiliateReferral.affiliate_id == affiliate.id)
         )
 

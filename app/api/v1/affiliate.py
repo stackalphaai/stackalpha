@@ -89,13 +89,28 @@ async def get_affiliate_dashboard(
             AffiliateReferralResponse(
                 id=r.id,
                 referred_user_email=r.referred_user.email if r.referred_user else "Unknown",
+                referred_user_full_name=r.referred_user.full_name if r.referred_user else None,
+                referred_user_has_active_subscription=r.referred_user.has_active_subscription if r.referred_user else False,
                 is_converted=r.is_converted,
                 converted_at=r.converted_at,
                 created_at=r.created_at,
             )
             for r in referrals
         ],
-        recent_commissions=[AffiliateCommissionResponse.model_validate(c) for c in commissions],
+        recent_commissions=[
+            AffiliateCommissionResponse(
+                id=c.id,
+                amount=float(c.amount),
+                commission_rate=float(c.commission_rate),
+                original_amount=float(c.original_amount),
+                status="paid" if c.is_paid else "pending",
+                source="Initial referral" if float(c.commission_rate) >= 20 else "Renewal",
+                is_paid=c.is_paid,
+                paid_at=c.paid_at,
+                created_at=c.created_at,
+            )
+            for c in commissions
+        ],
         pending_payouts=[AffiliatePayoutResponse.model_validate(p) for p in payouts],
         stats=stats,
     )
@@ -162,6 +177,8 @@ async def get_referrals(
             AffiliateReferralResponse(
                 id=r.id,
                 referred_user_email=r.referred_user.email if r.referred_user else "Unknown",
+                referred_user_full_name=r.referred_user.full_name if r.referred_user else None,
+                referred_user_has_active_subscription=r.referred_user.has_active_subscription if r.referred_user else False,
                 is_converted=r.is_converted,
                 converted_at=r.converted_at,
                 created_at=r.created_at,
@@ -191,7 +208,20 @@ async def get_commissions(
     commissions, total = await affiliate_service.get_commissions(affiliate, pagination)
 
     return PaginatedResponse.create(
-        items=[AffiliateCommissionResponse.model_validate(c) for c in commissions],
+        items=[
+            AffiliateCommissionResponse(
+                id=c.id,
+                amount=float(c.amount),
+                commission_rate=float(c.commission_rate),
+                original_amount=float(c.original_amount),
+                status="paid" if c.is_paid else "pending",
+                source="Initial referral" if float(c.commission_rate) >= 20 else "Renewal",
+                is_paid=c.is_paid,
+                paid_at=c.paid_at,
+                created_at=c.created_at,
+            )
+            for c in commissions
+        ],
         total=total,
         page=pagination.page,
         page_size=pagination.page_size,
