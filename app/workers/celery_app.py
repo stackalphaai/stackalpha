@@ -30,9 +30,9 @@ celery_app.conf.update(
 )
 
 celery_app.conf.beat_schedule = {
-    "analyze-markets-every-4-hours": {
+    "analyze-markets-every-2-hours": {
         "task": "app.workers.tasks.analysis.analyze_all_markets",
-        "schedule": 140.0,
+        "schedule": 7200.0,
     },
     "sync-positions-every-minute": {
         "task": "app.workers.tasks.trading.sync_all_positions",
