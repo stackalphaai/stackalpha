@@ -17,6 +17,7 @@ class HyperliquidExchangeService:
     def __init__(self, client: HyperliquidClient | None = None):
         self.client = client or get_hyperliquid_client()
         self.is_mainnet = not settings.hyperliquid_use_testnet
+        self._asset_index_cache: dict[str, int] | None = None
 
     def _get_timestamp(self) -> int:
         return int(time.time() * 1000)
@@ -85,8 +86,10 @@ class HyperliquidExchangeService:
 
         nonce = self._get_timestamp()
 
+        asset_index = await self._get_asset_index(coin)
+
         order = {
-            "a": self._get_asset_index(coin),
+            "a": asset_index,
             "b": is_buy,
             "p": str(price),
             "s": str(size),
@@ -167,7 +170,7 @@ class HyperliquidExchangeService:
 
         action = {
             "type": "cancel",
-            "cancels": [{"a": self._get_asset_index(coin), "o": order_id}],
+            "cancels": [{"a": await self._get_asset_index(coin), "o": order_id}],
         }
 
         signature = self._sign_l1_action(private_key, action, nonce)
@@ -210,7 +213,7 @@ class HyperliquidExchangeService:
         for order in open_orders:
             cancels.append(
                 {
-                    "a": self._get_asset_index(order.get("coin")),
+                    "a": await self._get_asset_index(order.get("coin")),
                     "o": order.get("oid"),
                 }
             )
@@ -247,7 +250,7 @@ class HyperliquidExchangeService:
 
         action = {
             "type": "updateLeverage",
-            "asset": self._get_asset_index(coin),
+            "asset": await self._get_asset_index(coin),
             "isCross": is_cross,
             "leverage": leverage,
         }
@@ -348,35 +351,28 @@ class HyperliquidExchangeService:
             logger.error(f"Error transferring USD: {str(e)}")
             raise HyperliquidAPIError(f"Failed to transfer USD: {str(e)}") from e
 
-    def _get_asset_index(self, coin: str) -> int:
-        coin_index_map = {
-            "BTC": 0,
-            "ETH": 1,
-            "ATOM": 2,
-            "MATIC": 3,
-            "DYDX": 4,
-            "SOL": 5,
-            "AVAX": 6,
-            "BNB": 7,
-            "APE": 8,
-            "OP": 9,
-            "LTC": 10,
-            "ARB": 11,
-            "DOGE": 12,
-            "INJ": 13,
-            "SUI": 14,
-            "kPEPE": 15,
-            "CRV": 16,
-            "LDO": 17,
-            "LINK": 18,
-            "STX": 19,
-            "RNDR": 20,
-            "CFX": 21,
-            "FTM": 22,
-            "GMX": 23,
-            "SNX": 24,
-        }
-        return coin_index_map.get(coin, 0)
+    async def _load_asset_indices(self) -> dict[str, int]:
+        """Fetch asset index map from Hyperliquid meta endpoint."""
+        try:
+            meta = await self.client.info_request({"type": "meta"})
+            universe = meta.get("universe", [])
+            return {asset["name"]: i for i, asset in enumerate(universe)}
+        except Exception as e:
+            logger.error(f"Failed to load asset indices: {e}")
+            return {}
+
+    async def _get_asset_index(self, coin: str) -> int:
+        if self._asset_index_cache is None:
+            self._asset_index_cache = await self._load_asset_indices()
+
+        if coin not in self._asset_index_cache:
+            # Refresh cache once in case new assets were listed
+            self._asset_index_cache = await self._load_asset_indices()
+
+        if coin not in self._asset_index_cache:
+            raise HyperliquidAPIError(f"Unknown asset: {coin}")
+
+        return self._asset_index_cache[coin]
 
 
 _exchange_service_instance: HyperliquidExchangeService | None = None
