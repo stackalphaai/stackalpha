@@ -69,8 +69,16 @@ celery_app.conf.beat_schedule = {
 
 
 @task_failure.connect
-def handle_task_failure(sender=None, task_id=None, exception=None, args=None,
-                        kwargs=None, traceback=None, einfo=None, **kw):
+def handle_task_failure(
+    sender=None,
+    task_id=None,
+    exception=None,
+    args=None,
+    kwargs=None,
+    traceback=None,
+    einfo=None,
+    **kw,
+):
     """Send an email alert to the admin when a Celery task fails."""
     admin_email = settings.admin_alert_email
     if not admin_email:
@@ -103,15 +111,17 @@ def handle_task_failure(sender=None, task_id=None, exception=None, args=None,
         from app.utils.email import EmailTemplates, get_base_email_context, get_email_subject
 
         context = get_base_email_context(admin_email, name="Admin")
-        context.update({
-            "task_name": task_name,
-            "task_id": task_id or "N/A",
-            "exception": str(exception),
-            "traceback": tb_text,
-            "args": task_args,
-            "timestamp": timestamp,
-            "retries": getattr(sender.request, "retries", None) if sender else None,
-        })
+        context.update(
+            {
+                "task_name": task_name,
+                "task_id": task_id or "N/A",
+                "exception": str(exception),
+                "traceback": tb_text,
+                "args": task_args,
+                "timestamp": timestamp,
+                "retries": getattr(sender.request, "retries", None) if sender else None,
+            }
+        )
 
         subject = get_email_subject(EmailTemplates.ERROR_ALERT, task_name=task_name)
 
@@ -123,13 +133,15 @@ def handle_task_failure(sender=None, task_id=None, exception=None, args=None,
 
         loop = asyncio.new_event_loop()
         try:
-            loop.run_until_complete(email_service.send_email(
-                to_email=admin_email,
-                subject=subject,
-                html_content=html,
-                text_content=text,
-                to_name="Admin",
-            ))
+            loop.run_until_complete(
+                email_service.send_email(
+                    to_email=admin_email,
+                    subject=subject,
+                    html_content=html,
+                    text_content=text,
+                    to_name="Admin",
+                )
+            )
         finally:
             loop.close()
 
