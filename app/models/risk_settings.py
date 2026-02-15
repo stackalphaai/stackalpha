@@ -29,7 +29,9 @@ class RiskSettings(Base):
 
     # Position Sizing
     position_sizing_method: Mapped[str] = mapped_column(
-        Enum(PositionSizingMethod), nullable=False, default=PositionSizingMethod.FIXED_PERCENT
+        Enum(PositionSizingMethod, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=PositionSizingMethod.FIXED_PERCENT,
     )
     max_position_size_usd: Mapped[float] = mapped_column(
         Numeric(12, 2), nullable=False, default=10000.0
