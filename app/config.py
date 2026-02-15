@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     zeptomail_api_url: str = "https://api.zeptomail.com/v1.1/email"
     email_from_name: str = "StackAlpha"
     email_from_address: str = "noreply@stackalpha.xyz"
+    admin_alert_email: str = ""
 
     # Subscription
     subscription_monthly_price: float = 50.00

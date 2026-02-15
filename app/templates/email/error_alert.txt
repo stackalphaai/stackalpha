@@ -1,0 +1,32 @@
+{% extends "base.txt" %}
+
+{% block content %}
+WORKER ERROR ALERT
+
+A Celery worker task has failed.
+
+TASK FAILURE
+------------
+Task: {{ task_name }}
+Task ID: {{ task_id }}
+Timestamp: {{ timestamp }}
+{% if retries %}Retries: {{ retries }}{% endif %}
+
+ERROR DETAILS
+{{ exception }}
+
+{% if traceback %}
+TRACEBACK
+{{ traceback }}
+{% endif %}
+
+{% if args %}
+TASK ARGUMENTS
+{{ args }}
+{% endif %}
+
+---
+
+This is an automated alert from the StackAlpha worker system.
+Check your logs for more details.
+{% endblock %}

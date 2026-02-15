@@ -234,6 +234,7 @@ class EmailTemplates:
     AFFILIATE_PAYOUT = "affiliate_payout"
     WALLET_CONNECTED = "wallet_connected"
     SECURITY_ALERT = "security_alert"
+    ERROR_ALERT = "error_alert"
 
 
 # Subject lines for each template
@@ -253,6 +254,7 @@ EMAIL_SUBJECTS = {
     EmailTemplates.AFFILIATE_PAYOUT: "Affiliate payout {status}",
     EmailTemplates.WALLET_CONNECTED: "Wallet connected successfully",
     EmailTemplates.SECURITY_ALERT: "Security alert: {alert_title}",
+    EmailTemplates.ERROR_ALERT: "Worker Error: {task_name}",
 }
 
 

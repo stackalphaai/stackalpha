@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Worker Error Alert</h1>
+
+<p class="lead">A Celery worker task has failed.</p>
+
+<div class="info-box danger">
+    <div class="info-box-title">Task Failure</div>
+    <div style="margin-top: 12px;">
+        <table style="width: 100%;">
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Task:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">{{ task_name }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Task ID:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right; font-family: monospace;">{{ task_id }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Timestamp:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">{{ timestamp }}</td>
+            </tr>
+            {% if retries %}
+            <tr>
+                <td style="padding: 8px 0; color: #6b7280;">Retries:</td>
+                <td style="padding: 8px 0; font-weight: 600; color: #111827; text-align: right;">{{ retries }}</td>
+            </tr>
+            {% endif %}
+        </table>
+    </div>
+</div>
+
+<div class="info-box warning">
+    <div class="info-box-title">Error Details</div>
+    <p style="margin: 8px 0 0; font-family: monospace; font-size: 13px; color: #92400e; word-break: break-word;">{{ exception }}</p>
+</div>
+
+{% if traceback %}
+<div style="margin-top: 16px;">
+    <p style="font-weight: 600; margin-bottom: 8px;">Traceback:</p>
+    <div style="background: #1f2937; color: #e5e7eb; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 12px; line-height: 1.5; overflow-x: auto; white-space: pre-wrap; word-break: break-word;">{{ traceback }}</div>
+</div>
+{% endif %}
+
+{% if args %}
+<div style="margin-top: 16px;">
+    <p style="font-weight: 600; margin-bottom: 8px;">Task Arguments:</p>
+    <div style="background: #f3f4f6; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 13px; word-break: break-word;">{{ args }}</div>
+</div>
+{% endif %}
+
+<div class="divider"></div>
+
+<p style="color: #6b7280; font-size: 13px;">This is an automated alert from the StackAlpha worker system. Check your logs for more details.</p>
+{% endblock %}
