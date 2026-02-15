@@ -172,6 +172,27 @@ class HyperliquidInfoService:
 
         return high_volume[:limit]
 
+    async def get_top_gainers(
+        self,
+        min_volume: float = 1_000_000,
+        min_price: float = 0.001,
+        limit: int = 3,
+    ) -> list[dict[str, Any]]:
+        """Get top gaining coins by 24h price change, filtered for tradability."""
+        markets = await self.get_all_market_data()
+
+        tradable = [
+            m
+            for m in markets
+            if m.get("volume_24h", 0) >= min_volume
+            and m.get("mark_price", 0) >= min_price
+            and m.get("price_change_percent_24h", 0) > 0
+        ]
+
+        tradable.sort(key=lambda x: x.get("price_change_percent_24h", 0), reverse=True)
+
+        return tradable[:limit]
+
     async def get_user_balance(self, address: str) -> dict[str, Any]:
         state = await self.get_user_state(address)
 
