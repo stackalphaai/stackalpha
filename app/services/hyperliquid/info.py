@@ -106,11 +106,14 @@ class HyperliquidInfoService:
             if asset.get("name") == symbol:
                 ctx = asset_ctxs[i] if i < len(asset_ctxs) else {}
                 mark_price = float(ctx.get("markPx", 0))
-                price_change_percent = float(ctx.get("dayChg", 0)) if ctx.get("dayChg") else 0
                 prev_price = float(ctx.get("prevDayPx", 0)) if ctx.get("prevDayPx") else 0
-                price_change = (
-                    mark_price - prev_price if prev_price else mark_price * price_change_percent
-                )
+
+                if mark_price > 0 and prev_price > 0:
+                    price_change = mark_price - prev_price
+                    price_change_percent = (price_change / prev_price) * 100
+                else:
+                    price_change = 0.0
+                    price_change_percent = 0.0
 
                 return {
                     "symbol": symbol,
@@ -120,7 +123,7 @@ class HyperliquidInfoService:
                     "open_interest": float(ctx.get("openInterest", 0)),
                     "volume_24h": float(ctx.get("dayNtlVlm", 0)),
                     "price_change_24h": price_change,
-                    "price_change_percent_24h": price_change_percent * 100,
+                    "price_change_percent_24h": round(price_change_percent, 4),
                 }
 
         return {}
@@ -138,11 +141,14 @@ class HyperliquidInfoService:
         for i, asset in enumerate(universe):
             ctx = asset_ctxs[i] if i < len(asset_ctxs) else {}
             mark_price = float(ctx.get("markPx", 0))
-            price_change_percent = float(ctx.get("dayChg", 0)) if ctx.get("dayChg") else 0
             prev_price = float(ctx.get("prevDayPx", 0)) if ctx.get("prevDayPx") else 0
-            price_change = (
-                mark_price - prev_price if prev_price else mark_price * price_change_percent
-            )
+
+            if mark_price > 0 and prev_price > 0:
+                price_change = mark_price - prev_price
+                price_change_percent = (price_change / prev_price) * 100
+            else:
+                price_change = 0.0
+                price_change_percent = 0.0
 
             markets.append(
                 {
@@ -153,7 +159,7 @@ class HyperliquidInfoService:
                     "open_interest": float(ctx.get("openInterest", 0)),
                     "volume_24h": float(ctx.get("dayNtlVlm", 0)),
                     "price_change_24h": price_change,
-                    "price_change_percent_24h": price_change_percent * 100,
+                    "price_change_percent_24h": round(price_change_percent, 4),
                 }
             )
 
