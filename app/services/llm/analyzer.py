@@ -38,7 +38,17 @@ class MarketAnalyzer:
             return {}
 
         df = pd.DataFrame(candles)
-        df.columns = ["timestamp", "open", "high", "low", "close", "volume"]
+        df = df.rename(
+            columns={
+                "t": "timestamp",
+                "o": "open",
+                "h": "high",
+                "l": "low",
+                "c": "close",
+                "v": "volume",
+            }
+        )
+        df = df[["timestamp", "open", "high", "low", "close", "volume"]]
         df = df.astype(
             {"open": float, "high": float, "low": float, "close": float, "volume": float}
         )
