@@ -198,6 +198,12 @@ class PaymentService:
             days=settings.subscription_grace_period_days
         )
 
+        # Update denormalized flag on user
+        user_result = await self.db.execute(select(User).where(User.id == subscription.user_id))
+        user = user_result.scalar_one_or_none()
+        if user:
+            user.is_subscribed = True
+
         logger.info(f"Subscription {subscription.id} activated until {subscription.expires_at}")
 
     async def _handle_failed_payment(self, payment: Payment):
@@ -274,8 +280,29 @@ class PaymentService:
                 sub.status = SubscriptionStatus.GRACE_PERIOD
             else:
                 sub.status = SubscriptionStatus.EXPIRED
+                # Clear denormalized flag on user
+                user_result = await self.db.execute(select(User).where(User.id == sub.user_id))
+                user = user_result.scalar_one_or_none()
+                if user:
+                    user.is_subscribed = False
 
-        return len(expired)
+        # Also expire grace period subscriptions that have passed their grace window
+        grace_result = await self.db.execute(
+            select(Subscription).where(
+                Subscription.status == SubscriptionStatus.GRACE_PERIOD,
+                Subscription.grace_period_ends_at < now,
+            )
+        )
+        grace_expired = list(grace_result.scalars().all())
+
+        for sub in grace_expired:
+            sub.status = SubscriptionStatus.EXPIRED
+            user_result = await self.db.execute(select(User).where(User.id == sub.user_id))
+            user = user_result.scalar_one_or_none()
+            if user:
+                user.is_subscribed = False
+
+        return len(expired) + len(grace_expired)
 
     async def cancel_subscription(
         self,
@@ -284,5 +311,11 @@ class PaymentService:
     ) -> Subscription:
         subscription.status = SubscriptionStatus.CANCELLED
         subscription.auto_renew = False
+
+        # Clear denormalized flag on user
+        user_result = await self.db.execute(select(User).where(User.id == subscription.user_id))
+        user = user_result.scalar_one_or_none()
+        if user:
+            user.is_subscribed = False
 
         return subscription

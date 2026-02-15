@@ -40,6 +40,7 @@ async def get_current_user_profile(
         is_active=user.is_active,
         is_verified=user.is_verified,
         is_2fa_enabled=user.is_2fa_enabled,
+        is_subscribed=user.is_subscribed,
         has_active_subscription=user.has_active_subscription,
         last_login=user.last_login,
         login_count=user.login_count,

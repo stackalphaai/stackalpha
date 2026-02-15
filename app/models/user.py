@@ -31,6 +31,7 @@ class User(Base):
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=True)  # Auto-verify for DeFi
+    is_subscribed: Mapped[bool] = mapped_column(Boolean, default=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_superadmin: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -83,7 +84,10 @@ class User(Base):
 
     @property
     def has_active_subscription(self) -> bool:
-        # Check if subscriptions relationship is loaded to avoid lazy loading in async context
+        # Fast path: use the denormalized column
+        if self.is_subscribed:
+            return True
+        # Fallback: check relationship if loaded
         state = instance_state(self)
         if "subscriptions" not in state.dict:
             return False

@@ -24,6 +24,7 @@ class UserResponse(UserBase, TimestampMixin):
     is_active: bool
     is_verified: bool
     is_2fa_enabled: bool
+    is_subscribed: bool = False
     has_active_subscription: bool = False
     last_login: datetime | None = None
 
