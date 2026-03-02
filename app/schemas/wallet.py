@@ -28,15 +28,24 @@ class AuthorizeWalletRequest(BaseModel):
 
 
 class GenerateAPIWalletRequest(BaseModel):
-    name: str | None = Field(None, max_length=100)
+    master_address: str = Field(..., min_length=42, max_length=42)
+
+    @field_validator("master_address")
+    @classmethod
+    def validate_master_address(cls, v: str) -> str:
+        if not v.startswith("0x"):
+            raise ValueError("Invalid Ethereum address format")
+        return v.lower()
 
 
 class WalletResponse(WalletBase, TimestampMixin):
     id: str
     user_id: str
     status: WalletStatus
+    master_address: str | None = None
     is_trading_enabled: bool
     is_authorized: bool
+    is_agent_approved: bool = False
     balance_usd: float | None = None
     margin_used: float | None = None
     unrealized_pnl: float | None = None
@@ -76,6 +85,7 @@ class EnableTradingRequest(BaseModel):
 
 class APIWalletResponse(BaseSchema):
     address: str
+    master_address: str
     private_key: str
     message: str = "Store this private key securely. It will not be shown again."
 

@@ -55,10 +55,14 @@ class Wallet(Base):
         SQLEnum(WalletStatus), default=WalletStatus.PENDING, nullable=False
     )
 
+    # For API wallets: the master wallet address on Hyperliquid that holds funds
+    master_address: Mapped[str | None] = mapped_column(String(42), nullable=True)
+
     encrypted_private_key: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     is_trading_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_authorized: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_agent_approved: Mapped[bool] = mapped_column(Boolean, default=False)
     authorization_signature: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     balance_usd: Mapped[float | None] = mapped_column(Numeric(20, 8), nullable=True)
@@ -85,4 +89,15 @@ class Wallet(Base):
 
     @property
     def can_trade(self) -> bool:
+        if self.wallet_type == WalletType.API:
+            return self.is_active and self.is_trading_enabled and self.is_agent_approved
         return self.is_active and self.is_trading_enabled
+
+    @property
+    def query_address(self) -> str:
+        """Address to use for Hyperliquid balance/position queries.
+
+        For API wallets this is the master wallet that holds the funds.
+        For master wallets this is the wallet's own address.
+        """
+        return self.master_address or self.address

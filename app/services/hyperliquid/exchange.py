@@ -70,6 +70,31 @@ class HyperliquidExchangeService:
 
         return signed.signature.hex()
 
+    def _build_payload(
+        self,
+        action: dict[str, Any],
+        nonce: int,
+        signature: str,
+        vault_address: str | None = None,
+    ) -> dict[str, Any]:
+        """Build the exchange request payload.
+
+        Includes ``vaultAddress`` when an agent wallet trades on behalf of a
+        master account.
+        """
+        payload: dict[str, Any] = {
+            "action": action,
+            "nonce": nonce,
+            "signature": {
+                "r": signature[:66],
+                "s": "0x" + signature[66:130],
+                "v": int(signature[130:], 16),
+            },
+        }
+        if vault_address:
+            payload["vaultAddress"] = vault_address
+        return payload
+
     async def place_order(
         self,
         private_key: str,
@@ -81,11 +106,11 @@ class HyperliquidExchangeService:
         reduce_only: bool = False,
         time_in_force: str = "Gtc",
         client_order_id: str | None = None,
+        vault_address: str | None = None,
     ) -> dict[str, Any]:
         Account.from_key(private_key)
 
         nonce = self._get_timestamp()
-
         asset_index = await self._get_asset_index(coin)
 
         order = {
@@ -110,17 +135,8 @@ class HyperliquidExchangeService:
             "grouping": "na",
         }
 
-        signature = self._sign_l1_action(private_key, action, nonce)
-
-        payload = {
-            "action": action,
-            "nonce": nonce,
-            "signature": {
-                "r": signature[:66],
-                "s": "0x" + signature[66:130],
-                "v": int(signature[130:], 16),
-            },
-        }
+        signature = self._sign_l1_action(private_key, action, nonce, vault_address)
+        payload = self._build_payload(action, nonce, signature, vault_address)
 
         try:
             return await self.client.exchange_request(payload)
@@ -135,6 +151,7 @@ class HyperliquidExchangeService:
         is_buy: bool,
         size: float,
         slippage: float = 0.01,
+        vault_address: str | None = None,
     ) -> dict[str, Any]:
         from app.services.hyperliquid.info import get_info_service
 
@@ -158,6 +175,7 @@ class HyperliquidExchangeService:
             price=round(price, 6),
             order_type="limit",
             time_in_force="Ioc",
+            vault_address=vault_address,
         )
 
     async def cancel_order(
@@ -165,6 +183,7 @@ class HyperliquidExchangeService:
         private_key: str,
         coin: str,
         order_id: int,
+        vault_address: str | None = None,
     ) -> dict[str, Any]:
         nonce = self._get_timestamp()
 
@@ -173,17 +192,8 @@ class HyperliquidExchangeService:
             "cancels": [{"a": await self._get_asset_index(coin), "o": order_id}],
         }
 
-        signature = self._sign_l1_action(private_key, action, nonce)
-
-        payload = {
-            "action": action,
-            "nonce": nonce,
-            "signature": {
-                "r": signature[:66],
-                "s": "0x" + signature[66:130],
-                "v": int(signature[130:], 16),
-            },
-        }
+        signature = self._sign_l1_action(private_key, action, nonce, vault_address)
+        payload = self._build_payload(action, nonce, signature, vault_address)
 
         try:
             return await self.client.exchange_request(payload)
@@ -195,13 +205,15 @@ class HyperliquidExchangeService:
         self,
         private_key: str,
         coin: str | None = None,
+        vault_address: str | None = None,
     ) -> dict[str, Any]:
         from app.services.hyperliquid.info import get_info_service
 
-        account = Account.from_key(private_key)
+        # Query open orders using the master address (where orders live)
+        query_address = vault_address or Account.from_key(private_key).address
         info_service = get_info_service()
 
-        open_orders = await info_service.get_user_open_orders(account.address)
+        open_orders = await info_service.get_user_open_orders(query_address)
 
         if coin:
             open_orders = [o for o in open_orders if o.get("coin") == coin]
@@ -221,17 +233,8 @@ class HyperliquidExchangeService:
         nonce = self._get_timestamp()
         action = {"type": "cancel", "cancels": cancels}
 
-        signature = self._sign_l1_action(private_key, action, nonce)
-
-        payload = {
-            "action": action,
-            "nonce": nonce,
-            "signature": {
-                "r": signature[:66],
-                "s": "0x" + signature[66:130],
-                "v": int(signature[130:], 16),
-            },
-        }
+        signature = self._sign_l1_action(private_key, action, nonce, vault_address)
+        payload = self._build_payload(action, nonce, signature, vault_address)
 
         try:
             return await self.client.exchange_request(payload)
@@ -245,6 +248,7 @@ class HyperliquidExchangeService:
         coin: str,
         leverage: int,
         is_cross: bool = True,
+        vault_address: str | None = None,
     ) -> dict[str, Any]:
         nonce = self._get_timestamp()
 
@@ -255,17 +259,8 @@ class HyperliquidExchangeService:
             "leverage": leverage,
         }
 
-        signature = self._sign_l1_action(private_key, action, nonce)
-
-        payload = {
-            "action": action,
-            "nonce": nonce,
-            "signature": {
-                "r": signature[:66],
-                "s": "0x" + signature[66:130],
-                "v": int(signature[130:], 16),
-            },
-        }
+        signature = self._sign_l1_action(private_key, action, nonce, vault_address)
+        payload = self._build_payload(action, nonce, signature, vault_address)
 
         try:
             return await self.client.exchange_request(payload)
@@ -278,13 +273,15 @@ class HyperliquidExchangeService:
         private_key: str,
         coin: str,
         slippage: float = 0.01,
+        vault_address: str | None = None,
     ) -> dict[str, Any]:
         from app.services.hyperliquid.info import get_info_service
 
-        account = Account.from_key(private_key)
+        # Query positions using the master address (where positions live)
+        query_address = vault_address or Account.from_key(private_key).address
         info_service = get_info_service()
 
-        positions = await info_service.get_user_positions(account.address)
+        positions = await info_service.get_user_positions(query_address)
         position = next((p for p in positions if p.get("symbol") == coin), None)
 
         if not position:
@@ -299,6 +296,7 @@ class HyperliquidExchangeService:
             is_buy=is_buy,
             size=size,
             slippage=slippage,
+            vault_address=vault_address,
         )
 
     async def usd_transfer(
@@ -306,18 +304,9 @@ class HyperliquidExchangeService:
         private_key: str,
         amount: float,
         to_perp: bool = True,
+        vault_address: str | None = None,
     ) -> dict[str, Any]:
-        """
-        Transfer USDC between Spot and Perp wallets.
-
-        Args:
-            private_key: Wallet private key for signing
-            amount: Amount in USDC (will be converted to micro-USDC)
-            to_perp: True for Spot -> Perp, False for Perp -> Spot
-
-        Returns:
-            API response from Hyperliquid
-        """
+        """Transfer USDC between Spot and Perp wallets on Hyperliquid."""
         nonce = self._get_timestamp()
 
         # Convert USDC to micro-USDC (1 USDC = 1,000,000 micro-USDC)
@@ -331,17 +320,8 @@ class HyperliquidExchangeService:
             },
         }
 
-        signature = self._sign_l1_action(private_key, action, nonce)
-
-        payload = {
-            "action": action,
-            "nonce": nonce,
-            "signature": {
-                "r": signature[:66],
-                "s": "0x" + signature[66:130],
-                "v": int(signature[130:], 16),
-            },
-        }
+        signature = self._sign_l1_action(private_key, action, nonce, vault_address)
+        payload = self._build_payload(action, nonce, signature, vault_address)
 
         try:
             result = await self.client.exchange_request(payload)

@@ -50,7 +50,7 @@ class TradeExecutor:
                 f"Maximum {settings.max_concurrent_positions} concurrent positions allowed"
             )
 
-        balance = await self.info_service.get_user_balance(wallet.address)
+        balance = await self.info_service.get_user_balance(wallet.query_address)
         available_balance = balance.get("available_balance", 0)
 
         if available_balance <= 0:
@@ -112,7 +112,7 @@ class TradeExecutor:
         if open_trades >= settings.max_concurrent_positions:
             raise PositionLimitError()
 
-        balance = await self.info_service.get_user_balance(wallet.address)
+        balance = await self.info_service.get_user_balance(wallet.query_address)
         if balance.get("available_balance", 0) < position_size_usd / leverage:
             raise InsufficientBalanceError()
 
@@ -171,6 +171,7 @@ class TradeExecutor:
             result = await self.exchange_service.close_position(
                 private_key=private_key,
                 coin=trade.symbol,
+                vault_address=wallet.master_address,
             )
 
             market_data = await self.info_service.get_market_data(trade.symbol)
@@ -214,6 +215,7 @@ class TradeExecutor:
             private_key=private_key,
             coin=trade.symbol,
             leverage=trade.leverage,
+            vault_address=wallet.master_address,
         )
 
         is_buy = trade.direction == TradeDirection.LONG
@@ -223,6 +225,7 @@ class TradeExecutor:
             coin=trade.symbol,
             is_buy=is_buy,
             size=trade.position_size,
+            vault_address=wallet.master_address,
         )
 
         trade.order_response = result
@@ -230,7 +233,7 @@ class TradeExecutor:
             result.get("response", {}).get("data", {}).get("statuses", [{}])[0].get("oid", "")
         )
 
-        positions = await self.info_service.get_user_positions(wallet.address)
+        positions = await self.info_service.get_user_positions(wallet.query_address)
         position = next((p for p in positions if p.get("symbol") == trade.symbol), None)
 
         if position:
@@ -258,7 +261,7 @@ class TradeExecutor:
         if trade.status != TradeStatus.OPEN:
             return trade
 
-        positions = await self.info_service.get_user_positions(wallet.address)
+        positions = await self.info_service.get_user_positions(wallet.query_address)
         position = next((p for p in positions if p.get("symbol") == trade.symbol), None)
 
         if position:

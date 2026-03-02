@@ -11,6 +11,7 @@ from app.schemas import (
     AuthorizeWalletRequest,
     ConnectWalletRequest,
     EnableTradingRequest,
+    GenerateAPIWalletRequest,
     SuccessResponse,
     WalletBalanceResponse,
     WalletPositionResponse,
@@ -94,17 +95,42 @@ async def get_authorization_message(
 
 @router.post("/generate-api-wallet", response_model=APIWalletResponse)
 async def generate_api_wallet(
+    data: GenerateAPIWalletRequest,
     current_user: CurrentUser,
     db: DB,
 ):
     wallet_service = WalletService(db)
-    wallet, private_key = await wallet_service.generate_api_wallet(current_user)
+    wallet, private_key = await wallet_service.generate_api_wallet(
+        current_user, data.master_address
+    )
     await db.commit()
 
     return APIWalletResponse(
         address=wallet.address,
+        master_address=wallet.master_address,
         private_key=private_key,
     )
+
+
+@router.post("/{wallet_id}/verify-agent", response_model=WalletResponse)
+async def verify_agent_approval(
+    wallet_id: str,
+    current_user: CurrentUser,
+    db: DB,
+):
+    from app.core.exceptions import NotFoundError
+
+    wallet_service = WalletService(db)
+    wallet = await wallet_service.get_wallet_by_id(wallet_id, current_user.id)
+
+    if not wallet:
+        raise NotFoundError("Wallet")
+
+    approved = await wallet_service.verify_agent_approval(wallet)
+    if approved:
+        await db.commit()
+
+    return wallet
 
 
 @router.get("/{wallet_id}/balance", response_model=WalletBalanceResponse)
@@ -122,7 +148,7 @@ async def get_wallet_balance(
         raise NotFoundError("Wallet")
 
     info_service = get_info_service()
-    balance = await info_service.get_user_balance(wallet.address)
+    balance = await info_service.get_user_balance(wallet.query_address)
 
     return WalletBalanceResponse(
         address=wallet.address,
@@ -145,7 +171,7 @@ async def get_wallet_positions(
         raise NotFoundError("Wallet")
 
     info_service = get_info_service()
-    positions = await info_service.get_user_positions(wallet.address)
+    positions = await info_service.get_user_positions(wallet.query_address)
 
     return [WalletPositionResponse(**pos) for pos in positions]
 
@@ -165,8 +191,8 @@ async def sync_wallet(
         raise NotFoundError("Wallet")
 
     info_service = get_info_service()
-    balance = await info_service.get_user_balance(wallet.address)
-    positions = await info_service.get_user_positions(wallet.address)
+    balance = await info_service.get_user_balance(wallet.query_address)
+    positions = await info_service.get_user_positions(wallet.query_address)
 
     wallet = await wallet_service.update_wallet_balance(
         wallet,
@@ -246,13 +272,14 @@ async def transfer_usd(
             private_key=private_key,
             amount=data.amount,
             to_perp=data.to_perp,
+            vault_address=wallet.master_address,
         )
 
         direction = "Spot → Perp" if data.to_perp else "Perp → Spot"
 
         # Sync wallet balance after transfer
         info_service = get_info_service()
-        balance = await info_service.get_user_balance(wallet.address)
+        balance = await info_service.get_user_balance(wallet.query_address)
         await wallet_service.update_wallet_balance(
             wallet,
             balance_usd=balance.get("balance_usd", 0),

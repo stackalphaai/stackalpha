@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 
 from eth_account import Account
@@ -9,6 +10,8 @@ from web3 import Web3
 from app.core.exceptions import BadRequestError, ConflictError, InvalidWalletError
 from app.core.security import decrypt_data, encrypt_data
 from app.models import User, Wallet, WalletStatus, WalletType
+
+logger = logging.getLogger(__name__)
 
 
 class WalletService:
@@ -86,7 +89,9 @@ class WalletService:
 
         return wallet
 
-    async def generate_api_wallet(self, user: User) -> tuple[Wallet, str]:
+    async def generate_api_wallet(self, user: User, master_address: str) -> tuple[Wallet, str]:
+        master_address = Web3.to_checksum_address(master_address.lower()).lower()
+
         account = Account.create()
         address = account.address.lower()
         private_key = account.key.hex()
@@ -99,8 +104,10 @@ class WalletService:
             wallet_type=WalletType.API,
             status=WalletStatus.ACTIVE,
             encrypted_private_key=encrypted_key,
+            master_address=master_address,
             is_trading_enabled=True,
             is_authorized=True,
+            is_agent_approved=False,
         )
 
         self.db.add(wallet)
@@ -108,6 +115,45 @@ class WalletService:
         await self.db.refresh(wallet)
 
         return wallet, private_key
+
+    async def verify_agent_approval(self, wallet: Wallet) -> bool:
+        if wallet.wallet_type != WalletType.API:
+            raise BadRequestError("Only API wallets need agent approval")
+
+        if not wallet.master_address:
+            raise BadRequestError("Wallet has no master address configured")
+
+        if wallet.is_agent_approved:
+            return True
+
+        from app.services.hyperliquid import get_info_service
+
+        info_service = get_info_service()
+
+        try:
+            result = await info_service.client.info_request(
+                {"type": "extraAgents", "user": wallet.master_address}
+            )
+
+            agent_address = wallet.address.lower()
+            if isinstance(result, list):
+                for agent in result:
+                    addr = agent.get("address", "").lower()
+                    if addr == agent_address:
+                        wallet.is_agent_approved = True
+                        logger.info(
+                            f"Agent {wallet.address} approved for master {wallet.master_address}"
+                        )
+                        return True
+
+            logger.info(
+                f"Agent {wallet.address} not yet approved for master {wallet.master_address}"
+            )
+            return False
+
+        except Exception as e:
+            logger.error(f"Failed to verify agent approval: {e}")
+            raise BadRequestError(f"Failed to verify agent approval: {e}") from e
 
     async def get_wallet_by_id(
         self,
