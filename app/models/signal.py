@@ -53,6 +53,9 @@ class Signal(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, index=True)
 
     symbol: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    exchange: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="hyperliquid", server_default="hyperliquid", index=True
+    )
     direction: Mapped[SignalDirection] = mapped_column(SQLEnum(SignalDirection), nullable=False)
     status: Mapped[SignalStatus] = mapped_column(
         SQLEnum(SignalStatus), default=SignalStatus.PENDING, nullable=False

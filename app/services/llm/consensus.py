@@ -11,9 +11,9 @@ logger = logging.getLogger(__name__)
 
 
 class ConsensusEngine:
-    def __init__(self, analyzer: MarketAnalyzer | None = None):
+    def __init__(self, analyzer=None, info_service=None):
         self.analyzer = analyzer or get_market_analyzer()
-        self.info_service = get_info_service()
+        self.info_service = info_service or get_info_service()
         self.models = settings.llm_models
         self.threshold = settings.llm_consensus_threshold
 
@@ -125,6 +125,11 @@ class ConsensusEngine:
 
         leverage = max(1, min(leverage, settings.max_leverage))
 
+        # Clamp TP/SL to leverage-friendly ranges (1-3% TP, 0.5-2% SL)
+        # This prevents LLMs from setting unrealistically wide targets
+        take_profit = self._clamp_tp(entry_price, take_profit, winning_direction)
+        stop_loss = self._clamp_sl(entry_price, stop_loss, winning_direction)
+
         all_reasoning = [a.get("reasoning", "") for a in relevant_analyses]
         all_factors = []
         for a in relevant_analyses:
@@ -173,11 +178,17 @@ class ConsensusEngine:
         direction: str,
         atr: float,
     ) -> float:
-        atr_multiplier = 2.0
+        # For leveraged futures: TP should be tight (1-3% from entry).
+        # Use ATR as a guide but cap it to a max of 3% of entry price.
+        atr_based = atr * 1.5
+        max_tp_distance = entry_price * 0.025  # 2.5% max
+        min_tp_distance = entry_price * 0.01  # 1% min
+        tp_distance = max(min_tp_distance, min(atr_based, max_tp_distance))
+
         if direction == "long":
-            return entry_price + (atr * atr_multiplier)
+            return entry_price + tp_distance
         else:
-            return entry_price - (atr * atr_multiplier)
+            return entry_price - tp_distance
 
     def _calculate_sl(
         self,
@@ -185,11 +196,65 @@ class ConsensusEngine:
         direction: str,
         atr: float,
     ) -> float:
-        atr_multiplier = 1.5
+        # For leveraged futures: SL should be tight (0.5-2% from entry).
+        # Use ATR as a guide but cap it to protect capital with leverage.
+        atr_based = atr * 1.0
+        max_sl_distance = entry_price * 0.015  # 1.5% max
+        min_sl_distance = entry_price * 0.005  # 0.5% min
+        sl_distance = max(min_sl_distance, min(atr_based, max_sl_distance))
+
         if direction == "long":
-            return entry_price - (atr * atr_multiplier)
+            return entry_price - sl_distance
         else:
-            return entry_price + (atr * atr_multiplier)
+            return entry_price + sl_distance
+
+    def _clamp_tp(
+        self,
+        entry_price: float,
+        tp_price: float,
+        direction: str,
+    ) -> float:
+        """Clamp TP to a max of 3% from entry (leverage-friendly)."""
+        max_tp_pct = 0.03  # 3%
+        min_tp_pct = 0.008  # 0.8%
+
+        if direction == "long":
+            tp_pct = (tp_price - entry_price) / entry_price if entry_price else 0
+            if tp_pct > max_tp_pct:
+                return entry_price * (1 + max_tp_pct)
+            if tp_pct < min_tp_pct:
+                return entry_price * (1 + min_tp_pct)
+        else:
+            tp_pct = (entry_price - tp_price) / entry_price if entry_price else 0
+            if tp_pct > max_tp_pct:
+                return entry_price * (1 - max_tp_pct)
+            if tp_pct < min_tp_pct:
+                return entry_price * (1 - min_tp_pct)
+        return tp_price
+
+    def _clamp_sl(
+        self,
+        entry_price: float,
+        sl_price: float,
+        direction: str,
+    ) -> float:
+        """Clamp SL to a max of 2% from entry (leverage-friendly)."""
+        max_sl_pct = 0.02  # 2%
+        min_sl_pct = 0.004  # 0.4%
+
+        if direction == "long":
+            sl_pct = (entry_price - sl_price) / entry_price if entry_price else 0
+            if sl_pct > max_sl_pct:
+                return entry_price * (1 - max_sl_pct)
+            if sl_pct < min_sl_pct:
+                return entry_price * (1 - min_sl_pct)
+        else:
+            sl_pct = (sl_price - entry_price) / entry_price if entry_price else 0
+            if sl_pct > max_sl_pct:
+                return entry_price * (1 + max_sl_pct)
+            if sl_pct < min_sl_pct:
+                return entry_price * (1 + min_sl_pct)
+        return sl_price
 
     def _calculate_position_size(
         self,
@@ -218,3 +283,19 @@ def get_consensus_engine() -> ConsensusEngine:
     if _consensus_engine_instance is None:
         _consensus_engine_instance = ConsensusEngine()
     return _consensus_engine_instance
+
+
+_binance_consensus_engine_instance: ConsensusEngine | None = None
+
+
+def get_binance_consensus_engine() -> ConsensusEngine:
+    global _binance_consensus_engine_instance
+    if _binance_consensus_engine_instance is None:
+        from app.services.binance import get_binance_info_service
+        from app.services.llm.binance_analyzer import get_binance_market_analyzer
+
+        _binance_consensus_engine_instance = ConsensusEngine(
+            analyzer=get_binance_market_analyzer(),
+            info_service=get_binance_info_service(),
+        )
+    return _binance_consensus_engine_instance

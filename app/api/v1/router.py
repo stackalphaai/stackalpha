@@ -5,6 +5,7 @@ from app.api.v1 import (
     affiliate,
     analytics,
     auth,
+    exchange,
     risk,
     subscription,
     telegram,
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/v1")
 router.include_router(auth.router)
 router.include_router(users.router)
 router.include_router(wallet.router)
+router.include_router(exchange.router)
 router.include_router(trading.router)
 router.include_router(subscription.router)
 router.include_router(telegram.router)

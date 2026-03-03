@@ -84,6 +84,11 @@ class PositionLimitError(BadRequestError):
         super().__init__(detail=detail)
 
 
+class RiskLimitError(BadRequestError):
+    def __init__(self, detail: str = "Risk management check failed"):
+        super().__init__(detail=detail)
+
+
 class SubscriptionRequiredError(AuthorizationError):
     def __init__(self, detail: str = "Active subscription required"):
         super().__init__(detail=detail)
@@ -103,6 +108,11 @@ class WebhookValidationError(BadRequestError):
 # External service exceptions
 class HyperliquidAPIError(ServiceUnavailableError):
     def __init__(self, detail: str = "Hyperliquid API error"):
+        super().__init__(detail=detail)
+
+
+class BinanceAPIError(ServiceUnavailableError):
+    def __init__(self, detail: str = "Binance API error"):
         super().__init__(detail=detail)
 
 

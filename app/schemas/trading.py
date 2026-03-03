@@ -20,6 +20,7 @@ class SignalBase(BaseSchema):
 
 class SignalResponse(SignalBase, TimestampMixin):
     id: str
+    exchange: str = "hyperliquid"
     status: SignalStatus
     outcome: SignalOutcome
     confidence_score: float
@@ -59,7 +60,8 @@ class CreateTradeRequest(BaseModel):
 
 class ExecuteSignalRequest(BaseModel):
     signal_id: str
-    wallet_id: str
+    wallet_id: str | None = None
+    exchange_connection_id: str | None = None
     position_size_percent: float | None = Field(None, gt=0, le=100)
     leverage: int | None = Field(None, ge=1, le=20)
 
@@ -71,7 +73,9 @@ class CloseTradeRequest(BaseModel):
 class TradeResponse(TradeBase, TimestampMixin):
     id: str
     user_id: str
-    wallet_id: str
+    wallet_id: str | None = None
+    exchange_connection_id: str | None = None
+    exchange: str = "hyperliquid"
     signal_id: str | None = None
     status: TradeStatus
     entry_price: float | None = None

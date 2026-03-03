@@ -1,3 +1,4 @@
+from app.services.trading.binance_executor import BinanceTradeExecutor
 from app.services.trading.executor import TradeExecutor
 from app.services.trading.position import (
     PositionMonitor,
@@ -10,6 +11,7 @@ from app.services.trading.signals import SignalService
 __all__ = [
     "SignalService",
     "TradeExecutor",
+    "BinanceTradeExecutor",
     "RiskManager",
     "get_risk_manager",
     "PositionMonitor",

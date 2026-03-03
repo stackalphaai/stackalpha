@@ -65,6 +65,18 @@ celery_app.conf.beat_schedule = {
         "task": "notifications.cleanup_old_notifications",
         "schedule": 604800.0,  # 7 days
     },
+    "analyze-binance-markets-every-2-hours": {
+        "task": "app.workers.tasks.analysis.analyze_binance_markets",
+        "schedule": 7200.0,
+    },
+    "monitor-binance-tpsl-every-30s": {
+        "task": "app.workers.tasks.trading.monitor_binance_tpsl",
+        "schedule": 30.0,
+    },
+    "sync-binance-positions-every-minute": {
+        "task": "app.workers.tasks.trading.sync_binance_positions",
+        "schedule": 60.0,
+    },
 }
 
 

@@ -81,6 +81,12 @@ class Settings(BaseSettings):
     subscription_yearly_price: float = 500.00
     subscription_grace_period_days: int = 3
 
+    # Binance
+    binance_default_leverage: int = 5
+    binance_max_leverage: int = 20
+    binance_min_volume_usd: float = 10_000_000
+    binance_top_movers_limit: int = 5
+
     # Trading
     max_position_size_percent: float = 10.0
     default_leverage: int = 5

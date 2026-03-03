@@ -162,3 +162,177 @@ async def _analyze_single_market(symbol: str):
             logger.info(f"Signal generated for {symbol}: {signal.direction.value}")
         else:
             logger.info(f"No signal generated for {symbol}")
+
+
+# ---------------------------------------------------------------------------
+# Binance market analysis
+# ---------------------------------------------------------------------------
+
+BINANCE_TOP_MOVERS_LIMIT = 5
+BINANCE_MIN_VOLUME_USD = 10_000_000
+
+
+@celery_app.task(bind=True, max_retries=3)
+def analyze_binance_markets(self):
+    try:
+        asyncio.run(_analyze_binance_markets())
+    except Exception as e:
+        logger.error(f"Binance market analysis failed: {e}")
+        raise self.retry(exc=e, countdown=60) from e
+
+
+async def _get_recent_binance_signal_symbols(db) -> set[str]:
+    """Get symbols that already have an active Binance signal."""
+    from sqlalchemy import select
+
+    from app.models import Signal, SignalStatus
+
+    result = await db.execute(
+        select(Signal.symbol).where(
+            Signal.status.in_([SignalStatus.ACTIVE, SignalStatus.PENDING]),
+            Signal.exchange == "binance",
+        )
+    )
+    return {row[0] for row in result.all()}
+
+
+async def _analyze_binance_markets():
+    from sqlalchemy import select
+
+    from app.config import settings as app_settings
+    from app.models import TelegramConnection
+    from app.services.binance import get_binance_info_service
+    from app.services.telegram_service import TelegramService
+    from app.services.trading import SignalService
+    from app.workers.database import get_worker_db
+    from app.workers.tasks.trading import auto_execute_binance_signal
+
+    logger.info("Starting Binance market analysis (top gainers + losers)...")
+
+    info_service = get_binance_info_service()
+    limit = app_settings.binance_top_movers_limit
+    min_vol = app_settings.binance_min_volume_usd
+
+    # Fetch top gainers and losers
+    try:
+        top_gainers = await info_service.get_top_gainers(
+            min_volume=min_vol,
+            limit=limit + 3,
+        )
+    except Exception as e:
+        logger.error(f"Failed to fetch Binance top gainers: {e}")
+        top_gainers = []
+
+    try:
+        top_losers = await info_service.get_top_losers(
+            min_volume=min_vol,
+            limit=limit + 3,
+        )
+    except Exception as e:
+        logger.error(f"Failed to fetch Binance top losers: {e}")
+        top_losers = []
+
+    if not top_gainers and not top_losers:
+        logger.warning("No Binance movers found above volume threshold")
+        return
+
+    if top_gainers:
+        summary = ", ".join(
+            f"{c['symbol']} (+{c['price_change_percent_24h']:.1f}%)" for c in top_gainers[:limit]
+        )
+        logger.info(f"Binance top gainers: {summary}")
+
+    if top_losers:
+        summary = ", ".join(
+            f"{c['symbol']} ({c['price_change_percent_24h']:.1f}%)" for c in top_losers[:limit]
+        )
+        logger.info(f"Binance top losers: {summary}")
+
+    # Combine and deduplicate
+    all_movers = []
+    seen_symbols = set()
+    for coin in top_gainers + top_losers:
+        symbol = coin.get("symbol")
+        if symbol and symbol not in seen_symbols:
+            seen_symbols.add(symbol)
+            all_movers.append(coin)
+
+    signals_generated = []
+
+    async with get_worker_db() as db:
+        signal_service = SignalService(db)
+
+        existing_symbols = await _get_recent_binance_signal_symbols(db)
+        if existing_symbols:
+            logger.info(f"Skipping Binance symbols with active signals: {existing_symbols}")
+
+        analyzed_count = 0
+        max_analyze = limit * 2  # analyze up to gainers + losers limit
+
+        for coin_data in all_movers:
+            if analyzed_count >= max_analyze:
+                break
+
+            symbol = coin_data.get("symbol")
+            if not symbol or symbol in existing_symbols:
+                if symbol:
+                    logger.info(f"Skipping {symbol} — active Binance signal exists")
+                continue
+
+            change_pct = coin_data.get("price_change_percent_24h", 0)
+            volume = coin_data.get("volume_24h", 0)
+            logger.info(
+                f"Analyzing Binance {symbol} (#{analyzed_count + 1}) — "
+                f"{change_pct:+.1f}%, vol ${volume:,.0f}"
+            )
+
+            try:
+                signal = await signal_service.generate_signal(symbol, exchange="binance")
+                analyzed_count += 1
+
+                if signal:
+                    signals_generated.append(signal)
+                    logger.info(
+                        f"Binance signal generated for {symbol}: "
+                        f"{signal.direction.value} @ {signal.entry_price} "
+                        f"(confidence={float(signal.confidence_score):.2f})"
+                    )
+
+                    # Trigger auto-execution for subscribed users
+                    auto_execute_binance_signal.delay(str(signal.id))
+                else:
+                    logger.info(f"No consensus reached for Binance {symbol}")
+
+            except Exception as e:
+                logger.error(f"Error analyzing Binance {symbol}: {e}", exc_info=True)
+                analyzed_count += 1
+                continue
+
+        await db.commit()
+
+        # Telegram notifications
+        if signals_generated:
+            try:
+                telegram_service = TelegramService(db)
+
+                result = await db.execute(
+                    select(TelegramConnection).where(
+                        TelegramConnection.is_verified,
+                        TelegramConnection.signal_notifications,
+                    )
+                )
+                connections = list(result.scalars().all())
+
+                for signal in signals_generated:
+                    for conn in connections:
+                        try:
+                            await telegram_service.send_signal_notification(conn, signal)
+                        except Exception as e:
+                            logger.error(f"Failed to send Telegram notification: {e}")
+            except Exception as e:
+                logger.error(f"Telegram notification batch failed: {e}")
+
+    logger.info(
+        f"Binance market analysis complete. Analyzed {analyzed_count} movers, "
+        f"generated {len(signals_generated)} signals."
+    )

@@ -18,9 +18,9 @@ from app.schemas import (
     TradeDetailResponse,
     TradeResponse,
 )
-from app.services import WalletService
+from app.services import ExchangeConnectionService, WalletService
 from app.services.hyperliquid import get_info_service
-from app.services.trading import SignalService, TradeExecutor
+from app.services.trading import BinanceTradeExecutor, SignalService, TradeExecutor
 
 router = APIRouter(prefix="/trading", tags=["Trading"])
 
@@ -36,6 +36,7 @@ async def get_signals(
     symbol: str | None = None,
     direction: SignalDirection | None = None,
     status: SignalStatus | None = None,
+    exchange: str | None = None,
 ):
     signal_service = SignalService(db)
     signals, total = await signal_service.get_signals(
@@ -43,6 +44,7 @@ async def get_signals(
         symbol=symbol,
         direction=direction,
         status=status,
+        exchange=exchange,
     )
 
     return PaginatedResponse.create(
@@ -87,35 +89,57 @@ async def execute_signal(
     current_user: SubscribedUser,
     db: DB,
 ):
+    from app.core.exceptions import BadRequestError, NotFoundError
+
     signal_service = SignalService(db)
     signal = await signal_service.get_signal_by_id(signal_id)
 
     if not signal:
-        from app.core.exceptions import NotFoundError
-
         raise NotFoundError("Signal")
 
     if not signal.is_valid:
-        from app.core.exceptions import BadRequestError
-
         raise BadRequestError("Signal is no longer valid")
 
-    wallet_service = WalletService(db)
-    wallet = await wallet_service.get_wallet_by_id(data.wallet_id, current_user.id)
+    # Route to the appropriate executor based on signal exchange
+    if signal.exchange == "binance":
+        if not data.exchange_connection_id:
+            raise BadRequestError("exchange_connection_id is required for Binance signals")
 
-    if not wallet:
-        from app.core.exceptions import NotFoundError
+        exchange_service = ExchangeConnectionService(db)
+        connection = await exchange_service.get_connection_by_id(
+            data.exchange_connection_id, current_user.id
+        )
 
-        raise NotFoundError("Wallet")
+        if not connection:
+            raise NotFoundError("Exchange connection")
 
-    executor = TradeExecutor(db)
-    trade = await executor.execute_signal(
-        user=current_user,
-        wallet=wallet,
-        signal=signal,
-        position_size_percent=data.position_size_percent,
-        leverage=data.leverage,
-    )
+        executor = BinanceTradeExecutor(db)
+        trade = await executor.execute_signal(
+            user=current_user,
+            exchange_connection=connection,
+            signal=signal,
+            position_size_percent=data.position_size_percent,
+            leverage=data.leverage,
+        )
+    else:
+        if not data.wallet_id:
+            raise BadRequestError("wallet_id is required for Hyperliquid signals")
+
+        wallet_service = WalletService(db)
+        wallet = await wallet_service.get_wallet_by_id(data.wallet_id, current_user.id)
+
+        if not wallet:
+            raise NotFoundError("Wallet")
+
+        executor = TradeExecutor(db)
+        trade = await executor.execute_signal(
+            user=current_user,
+            wallet=wallet,
+            signal=signal,
+            position_size_percent=data.position_size_percent,
+            leverage=data.leverage,
+        )
+
     await db.commit()
     return trade
 
@@ -127,6 +151,7 @@ async def get_trades(
     db: DB,
     symbol: str | None = None,
     status: TradeStatus | None = None,
+    exchange: str | None = None,
 ):
     query = select(Trade).where(Trade.user_id == current_user.id)
 
@@ -134,6 +159,8 @@ async def get_trades(
         query = query.where(Trade.symbol == symbol)
     if status:
         query = query.where(Trade.status == status)
+    if exchange:
+        query = query.where(Trade.exchange == exchange)
 
     count_result = await db.execute(select(func.count()).select_from(query.subquery()))
     total = count_result.scalar() or 0
@@ -227,6 +254,8 @@ async def close_trade(
     current_user: SubscribedUser,
     db: DB,
 ):
+    from app.core.exceptions import NotFoundError
+
     result = await db.execute(
         select(Trade).where(
             Trade.id == trade_id,
@@ -236,15 +265,27 @@ async def close_trade(
     trade = result.scalar_one_or_none()
 
     if not trade:
-        from app.core.exceptions import NotFoundError
-
         raise NotFoundError("Trade")
 
-    wallet_service = WalletService(db)
-    wallet = await wallet_service.get_wallet_by_id(trade.wallet_id)
+    if trade.exchange == "binance":
+        # Close via Binance executor
+        exchange_service = ExchangeConnectionService(db)
+        connection = await exchange_service.get_connection_by_id(
+            trade.exchange_connection_id, current_user.id
+        )
 
-    executor = TradeExecutor(db)
-    trade = await executor.close_trade(trade, wallet, data.reason)
+        if not connection:
+            raise NotFoundError("Exchange connection")
+
+        binance_executor = BinanceTradeExecutor(db)
+        trade = await binance_executor.close_trade(trade, connection, data.reason)
+    else:
+        wallet_service = WalletService(db)
+        wallet = await wallet_service.get_wallet_by_id(trade.wallet_id)
+
+        executor = TradeExecutor(db)
+        trade = await executor.close_trade(trade, wallet, data.reason)
+
     await db.commit()
     return trade
 

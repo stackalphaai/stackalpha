@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Trade, TradeStatus
+from app.models.risk_settings import RiskSettings
 
 logger = logging.getLogger(__name__)
 
@@ -106,10 +107,53 @@ class RiskManagementService:
         self.db = db
 
     async def get_risk_limits(self, user_id: str) -> RiskLimits:
-        """Get user's risk limits from database"""
-        # TODO: Fetch from database user settings table
-        # For now, return defaults
-        return RiskLimits()
+        """Get user's risk limits from database, creating defaults if missing."""
+        result = await self.db.execute(select(RiskSettings).where(RiskSettings.user_id == user_id))
+        risk_settings = result.scalar_one_or_none()
+
+        if not risk_settings:
+            # Create default risk settings for this user
+            risk_settings = RiskSettings(user_id=user_id)
+            self.db.add(risk_settings)
+            await self.db.flush()
+
+        # Map the DB PositionSizingMethod string to our local enum
+        sizing_method_map = {
+            "fixed_amount": PositionSizingMethod.FIXED_AMOUNT,
+            "fixed_percent": PositionSizingMethod.FIXED_PERCENT,
+            "kelly": PositionSizingMethod.KELLY_CRITERION,
+            "risk_parity": PositionSizingMethod.RISK_PARITY,
+        }
+
+        return RiskLimits(
+            max_position_size_usd=float(risk_settings.max_position_size_usd),
+            max_position_size_percent=float(risk_settings.max_position_size_percent),
+            position_sizing_method=sizing_method_map.get(
+                risk_settings.position_sizing_method, PositionSizingMethod.FIXED_PERCENT
+            ),
+            max_portfolio_heat=float(risk_settings.max_portfolio_heat),
+            max_open_positions=risk_settings.max_open_positions,
+            max_leverage=risk_settings.max_leverage,
+            max_daily_loss_usd=float(risk_settings.max_daily_loss_usd),
+            max_daily_loss_percent=float(risk_settings.max_daily_loss_percent),
+            max_weekly_loss_percent=float(risk_settings.max_weekly_loss_percent),
+            max_monthly_loss_percent=float(risk_settings.max_monthly_loss_percent),
+            min_risk_reward_ratio=float(risk_settings.min_risk_reward_ratio),
+            max_correlated_positions=risk_settings.max_correlated_positions,
+            max_single_asset_exposure_percent=float(
+                risk_settings.max_single_asset_exposure_percent
+            ),
+            max_consecutive_losses=risk_settings.max_consecutive_losses,
+            trading_paused=risk_settings.trading_paused,
+        )
+
+    async def get_min_signal_confidence(self, user_id: str) -> float:
+        """Get user's minimum signal confidence threshold."""
+        result = await self.db.execute(
+            select(RiskSettings.min_signal_confidence).where(RiskSettings.user_id == user_id)
+        )
+        confidence = result.scalar_one_or_none()
+        return float(confidence) if confidence is not None else 0.7
 
     async def get_portfolio_metrics(self, user_id: str) -> PortfolioMetrics:
         """Calculate real-time portfolio metrics"""
@@ -435,3 +479,52 @@ class RiskManagementService:
                 return False, f"Risk-reward too low: {rr_ratio:.2f}"
 
         return True, None
+
+    async def validate_signal_execution(
+        self,
+        user_id: str,
+        signal_confidence: float,
+        proposed_leverage: int,
+        entry_price: float,
+        stop_loss_price: float,
+        take_profit_price: float,
+        position_size_usd: float,
+    ) -> tuple[bool, str | None, int, float]:
+        """
+        Full pre-trade validation combining signal confidence, risk limits,
+        leverage clamping, and position sizing.
+
+        Returns:
+            (approved, rejection_reason, clamped_leverage, clamped_position_size_usd)
+        """
+        limits = await self.get_risk_limits(user_id)
+
+        # 1. Check signal confidence against user's minimum
+        min_confidence = await self.get_min_signal_confidence(user_id)
+        if signal_confidence < min_confidence:
+            return (
+                False,
+                f"Signal confidence {signal_confidence:.0%} below minimum {min_confidence:.0%}",
+                0,
+                0,
+            )
+
+        # 2. Clamp leverage to user's max
+        clamped_leverage = max(1, min(proposed_leverage, limits.max_leverage))
+
+        # 3. Clamp position size to user's limits
+        clamped_size = min(position_size_usd, limits.max_position_size_usd)
+
+        # 4. Run full trade validation
+        direction = "long" if take_profit_price > entry_price else "short"
+        approved, reason = await self.validate_trade(
+            user_id=user_id,
+            symbol="",  # Symbol not needed for these checks
+            direction=direction,
+            position_size_usd=clamped_size,
+            entry_price=entry_price,
+            stop_loss_price=stop_loss_price,
+            take_profit_price=take_profit_price,
+        )
+
+        return approved, reason, clamped_leverage, clamped_size

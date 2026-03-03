@@ -1,4 +1,5 @@
 from app.services.affiliate_service import AffiliateService
+from app.services.exchange_connection_service import ExchangeConnectionService
 from app.services.auth_service import AuthService
 from app.services.email_service import EmailService, get_email_service
 from app.services.payment_service import PaymentService
@@ -15,4 +16,5 @@ __all__ = [
     "EmailService",
     "get_email_service",
     "AffiliateService",
+    "ExchangeConnectionService",
 ]

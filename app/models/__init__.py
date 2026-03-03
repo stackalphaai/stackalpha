@@ -1,3 +1,8 @@
+from app.models.exchange_connection import (
+    ExchangeConnection,
+    ExchangeConnectionStatus,
+    ExchangeType,
+)
 from app.models.affiliate import (
     Affiliate,
     AffiliateCommission,
@@ -28,6 +33,10 @@ from app.models.wallet import Wallet, WalletStatus, WalletType
 __all__ = [
     # User
     "User",
+    # Exchange Connection
+    "ExchangeConnection",
+    "ExchangeType",
+    "ExchangeConnectionStatus",
     # Wallet
     "Wallet",
     "WalletType",

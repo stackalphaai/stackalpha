@@ -60,14 +60,23 @@ class Trade(Base):
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    wallet_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("wallets.id", ondelete="CASCADE"), nullable=False, index=True
+    wallet_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("wallets.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    exchange_connection_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("exchange_connections.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     signal_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("signals.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     symbol: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    exchange: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="hyperliquid", server_default="hyperliquid", index=True
+    )
     direction: Mapped[TradeDirection] = mapped_column(SQLEnum(TradeDirection), nullable=False)
     status: Mapped[TradeStatus] = mapped_column(
         SQLEnum(TradeStatus), default=TradeStatus.PENDING, nullable=False, index=True
@@ -98,6 +107,11 @@ class Trade(Base):
 
     hyperliquid_order_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     hyperliquid_position_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # Generic exchange order fields (used for Binance and future exchanges)
+    exchange_order_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    tp_order_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    sl_order_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     order_response: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     position_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

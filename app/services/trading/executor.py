@@ -10,6 +10,7 @@ from app.core.exceptions import (
     HyperliquidAPIError,
     InsufficientBalanceError,
     PositionLimitError,
+    RiskLimitError,
     TradingDisabledError,
 )
 from app.models import (
@@ -22,6 +23,7 @@ from app.models import (
     Wallet,
 )
 from app.services.hyperliquid import get_exchange_service, get_info_service
+from app.services.trading.risk_management import RiskManagementService
 from app.services.wallet_service import WalletService
 
 logger = logging.getLogger(__name__)
@@ -44,12 +46,6 @@ class TradeExecutor:
         if not wallet.can_trade:
             raise TradingDisabledError("Trading is not enabled for this wallet")
 
-        open_trades = await self._count_open_trades(user.id)
-        if open_trades >= settings.max_concurrent_positions:
-            raise PositionLimitError(
-                f"Maximum {settings.max_concurrent_positions} concurrent positions allowed"
-            )
-
         balance = await self.info_service.get_user_balance(wallet.query_address)
         available_balance = balance.get("available_balance", 0)
 
@@ -61,6 +57,25 @@ class TradeExecutor:
         leverage_val = max(1, min(leverage_val, settings.max_leverage))
 
         position_size_usd = available_balance * (position_pct / 100)
+
+        # --- Risk Management Validation ---
+        risk_service = RiskManagementService(self.db)
+        (
+            approved,
+            reason,
+            leverage_val,
+            position_size_usd,
+        ) = await risk_service.validate_signal_execution(
+            user_id=user.id,
+            signal_confidence=float(signal.confidence_score),
+            proposed_leverage=leverage_val,
+            entry_price=float(signal.entry_price),
+            stop_loss_price=float(signal.stop_loss_price),
+            take_profit_price=float(signal.take_profit_price),
+            position_size_usd=position_size_usd,
+        )
+        if not approved:
+            raise RiskLimitError(f"Risk check failed: {reason}")
 
         market_data = await self.info_service.get_market_data(signal.symbol)
         current_price = market_data.get("mark_price", signal.entry_price)
@@ -108,10 +123,6 @@ class TradeExecutor:
         if not wallet.can_trade:
             raise TradingDisabledError("Trading is not enabled for this wallet")
 
-        open_trades = await self._count_open_trades(user.id)
-        if open_trades >= settings.max_concurrent_positions:
-            raise PositionLimitError()
-
         balance = await self.info_service.get_user_balance(wallet.query_address)
         if balance.get("available_balance", 0) < position_size_usd / leverage:
             raise InsufficientBalanceError()
@@ -121,6 +132,32 @@ class TradeExecutor:
 
         if current_price <= 0:
             raise BadRequestError(f"Could not fetch price for {symbol}")
+
+        # --- Risk Management Validation ---
+        risk_service = RiskManagementService(self.db)
+        entry_price = current_price
+        sl = stop_loss_price or (
+            current_price * 0.98 if direction == TradeDirection.LONG else current_price * 1.02
+        )
+        tp = take_profit_price or (
+            current_price * 1.02 if direction == TradeDirection.LONG else current_price * 0.98
+        )
+
+        approved, reason = await risk_service.validate_trade(
+            user_id=user.id,
+            symbol=symbol,
+            direction=direction.value,
+            position_size_usd=position_size_usd,
+            entry_price=entry_price,
+            stop_loss_price=sl,
+            take_profit_price=tp,
+        )
+        if not approved:
+            raise RiskLimitError(f"Risk check failed: {reason}")
+
+        # Clamp leverage to user's max
+        limits = await risk_service.get_risk_limits(user.id)
+        leverage = max(1, min(leverage, limits.max_leverage))
 
         position_size = position_size_usd / current_price
 

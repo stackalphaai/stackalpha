@@ -5,16 +5,19 @@ from typing import Any
 import pandas as pd
 import ta
 
-from app.services.hyperliquid import get_info_service
+from app.services.binance import get_binance_info_service
+from app.services.binance.utils import to_binance_symbol
 from app.services.llm.openrouter import OpenRouterClient, get_openrouter_client
 
 logger = logging.getLogger(__name__)
 
 
-class MarketAnalyzer:
+class BinanceMarketAnalyzer:
+    """Market analyzer that fetches candles from Binance Futures."""
+
     def __init__(self, client: OpenRouterClient | None = None):
         self.client = client or get_openrouter_client()
-        self.info_service = get_info_service()
+        self.info_service = get_binance_info_service()
 
     async def get_technical_indicators(
         self,
@@ -22,16 +25,12 @@ class MarketAnalyzer:
         interval: str = "4h",
         lookback_periods: int = 100,
     ) -> dict[str, Any]:
-        import time
+        binance_symbol = to_binance_symbol(symbol)
 
-        end_time = int(time.time() * 1000)
-        start_time = end_time - (lookback_periods * self._interval_to_ms(interval))
-
-        candles = await self.info_service.get_candles(
-            coin=symbol,
+        candles = await self.info_service.get_klines(
+            symbol=binance_symbol,
             interval=interval,
-            start_time=start_time,
-            end_time=end_time,
+            limit=lookback_periods,
         )
 
         if not candles:
@@ -55,21 +54,25 @@ class MarketAnalyzer:
 
         indicators = {}
 
+        # RSI
         indicators["rsi_14"] = float(
             ta.momentum.RSIIndicator(df["close"], window=14).rsi().iloc[-1]
         )
 
+        # MACD
         macd = ta.trend.MACD(df["close"])
         indicators["macd"] = float(macd.macd().iloc[-1])
         indicators["macd_signal"] = float(macd.macd_signal().iloc[-1])
         indicators["macd_histogram"] = float(macd.macd_diff().iloc[-1])
 
+        # Bollinger Bands
         bb = ta.volatility.BollingerBands(df["close"], window=20, window_dev=2)
         indicators["bb_upper"] = float(bb.bollinger_hband().iloc[-1])
         indicators["bb_middle"] = float(bb.bollinger_mavg().iloc[-1])
         indicators["bb_lower"] = float(bb.bollinger_lband().iloc[-1])
         indicators["bb_width"] = float(bb.bollinger_wband().iloc[-1])
 
+        # EMAs and SMA
         indicators["ema_9"] = float(
             ta.trend.EMAIndicator(df["close"], window=9).ema_indicator().iloc[-1]
         )
@@ -83,18 +86,22 @@ class MarketAnalyzer:
             ta.trend.SMAIndicator(df["close"], window=min(200, len(df))).sma_indicator().iloc[-1]
         )
 
+        # Stochastic
         stoch = ta.momentum.StochasticOscillator(df["high"], df["low"], df["close"])
         indicators["stoch_k"] = float(stoch.stoch().iloc[-1])
         indicators["stoch_d"] = float(stoch.stoch_signal().iloc[-1])
 
+        # ATR
         atr = ta.volatility.AverageTrueRange(df["high"], df["low"], df["close"], window=14)
         indicators["atr_14"] = float(atr.average_true_range().iloc[-1])
 
+        # ADX
         adx = ta.trend.ADXIndicator(df["high"], df["low"], df["close"], window=14)
         indicators["adx"] = float(adx.adx().iloc[-1])
         indicators["di_plus"] = float(adx.adx_pos().iloc[-1])
         indicators["di_minus"] = float(adx.adx_neg().iloc[-1])
 
+        # Price data
         indicators["current_price"] = float(df["close"].iloc[-1])
         indicators["price_change_pct"] = float(
             (df["close"].iloc[-1] - df["close"].iloc[0]) / df["close"].iloc[0] * 100
@@ -111,7 +118,7 @@ class MarketAnalyzer:
         indicators: dict[str, Any],
         market_data: dict[str, Any],
     ) -> dict[str, Any]:
-        system_prompt = """You are an expert cryptocurrency market analyst specializing in LEVERAGED perpetual futures trading on Hyperliquid.
+        system_prompt = """You are an expert cryptocurrency market analyst specializing in LEVERAGED perpetual futures trading on Binance Futures.
 Analyze the provided technical indicators and market data, then provide a trading recommendation.
 
 CRITICAL — LEVERAGE-AWARE TP/SL RULES:
@@ -149,17 +156,18 @@ Guidelines:
 - Consider trend strength from ADX
 - Higher leverage = tighter TP/SL required"""
 
-        user_prompt = f"""Analyze {symbol} for a potential trade opportunity.
+        user_prompt = f"""Analyze {symbol} on Binance Futures for a potential trade opportunity.
 
 Technical Indicators:
 {json.dumps(indicators, indent=2)}
 
 Market Data:
 - Mark Price: ${market_data.get("mark_price", "N/A")}
-- Index Price: ${market_data.get("index_price", "N/A")}
 - Funding Rate: {market_data.get("funding_rate", "N/A")}%
-- Open Interest: ${market_data.get("open_interest", "N/A")}
 - 24h Volume: ${market_data.get("volume_24h", "N/A")}
+- 24h Price Change: {market_data.get("price_change_percent_24h", "N/A")}%
+- 24h High: ${market_data.get("high_24h", "N/A")}
+- 24h Low: ${market_data.get("low_24h", "N/A")}
 
 Provide your analysis and trading recommendation in JSON format."""
 
@@ -207,24 +215,12 @@ Provide your analysis and trading recommendation in JSON format."""
                 "error": str(e),
             }
 
-    def _interval_to_ms(self, interval: str) -> int:
-        mapping = {
-            "1m": 60_000,
-            "5m": 300_000,
-            "15m": 900_000,
-            "30m": 1_800_000,
-            "1h": 3_600_000,
-            "4h": 14_400_000,
-            "1d": 86_400_000,
-        }
-        return mapping.get(interval, 14_400_000)
+
+_binance_analyzer_instance: BinanceMarketAnalyzer | None = None
 
 
-_analyzer_instance: MarketAnalyzer | None = None
-
-
-def get_market_analyzer() -> MarketAnalyzer:
-    global _analyzer_instance
-    if _analyzer_instance is None:
-        _analyzer_instance = MarketAnalyzer()
-    return _analyzer_instance
+def get_binance_market_analyzer() -> BinanceMarketAnalyzer:
+    global _binance_analyzer_instance
+    if _binance_analyzer_instance is None:
+        _binance_analyzer_instance = BinanceMarketAnalyzer()
+    return _binance_analyzer_instance

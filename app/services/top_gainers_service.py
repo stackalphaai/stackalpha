@@ -285,6 +285,17 @@ class TopGainersService:
 
         return json.dumps(payload)
 
+    def get_mid_prices(self) -> dict[str, float]:
+        """Return a snapshot of current mid prices for all tracked coins."""
+        return {
+            symbol: coin.mid_price for symbol, coin in self._coins.items() if coin.mid_price > 0
+        }
+
+    def get_mid_price(self, symbol: str) -> float | None:
+        """Return the current mid price for a single symbol."""
+        coin = self._coins.get(symbol)
+        return coin.mid_price if coin and coin.mid_price > 0 else None
+
     @property
     def client_count(self) -> int:
         return len(self._connected_clients)

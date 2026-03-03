@@ -53,6 +53,7 @@ async def _execute_trade(
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
+    from app.core.exceptions import RiskLimitError
     from app.models import Signal, User, Wallet
     from app.services.telegram_service import TelegramService
     from app.services.trading import TradeExecutor
@@ -75,13 +76,21 @@ async def _execute_trade(
             return
 
         executor = TradeExecutor(db)
-        trade = await executor.execute_signal(
-            user=user,
-            wallet=wallet,
-            signal=signal,
-            position_size_percent=position_size_percent,
-            leverage=leverage,
-        )
+
+        try:
+            trade = await executor.execute_signal(
+                user=user,
+                wallet=wallet,
+                signal=signal,
+                position_size_percent=position_size_percent,
+                leverage=leverage,
+            )
+        except RiskLimitError as e:
+            logger.info(
+                f"Trade for signal {signal_id} rejected by risk management "
+                f"for user {user_id}: {e.detail}"
+            )
+            return
 
         await db.commit()
 
@@ -193,3 +202,333 @@ async def _monitor_tp_sl(trade_id: str):
         if should_close and close_reason:
             close_trade_task.delay(trade_id, close_reason.value)
             logger.info(f"Trade {trade_id} triggered {close_reason.value} at {current_price}")
+
+
+# ---------------------------------------------------------------------------
+# Binance-specific tasks
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(bind=True)
+def auto_execute_binance_signal(self, signal_id: str):
+    """Auto-execute a Binance signal for all subscribed users with active connections."""
+    try:
+        asyncio.run(_auto_execute_binance_signal(signal_id))
+    except Exception as e:
+        logger.error(f"Binance auto-execute failed for signal {signal_id}: {e}")
+        raise
+
+
+async def _auto_execute_binance_signal(signal_id: str):
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from app.core.exceptions import RiskLimitError
+    from app.models import Signal, User
+    from app.models.exchange_connection import ExchangeConnection, ExchangeConnectionStatus
+    from app.services.telegram_service import TelegramService
+    from app.services.trading.binance_executor import BinanceTradeExecutor
+    from app.workers.database import get_worker_db
+
+    async with get_worker_db() as db:
+        result = await db.execute(select(Signal).where(Signal.id == signal_id))
+        signal = result.scalar_one_or_none()
+
+        if not signal:
+            logger.error(f"Signal {signal_id} not found for auto-execution")
+            return
+
+        # Get all users with active Binance connections that have trading enabled
+        result = await db.execute(
+            select(User)
+            .join(ExchangeConnection, ExchangeConnection.user_id == User.id)
+            .options(
+                selectinload(User.exchange_connections),
+                selectinload(User.telegram_connection),
+            )
+            .where(
+                ExchangeConnection.status == ExchangeConnectionStatus.ACTIVE,
+                ExchangeConnection.is_trading_enabled.is_(True),
+                User.is_subscribed.is_(True),
+            )
+            .distinct()
+        )
+        users = list(result.scalars().all())
+
+        if not users:
+            logger.info("No subscribed users with active Binance trading connections")
+            return
+
+        logger.info(f"Auto-executing Binance signal {signal_id} for {len(users)} users")
+
+        executor = BinanceTradeExecutor(db)
+        telegram_service = TelegramService(db)
+
+        for user in users:
+            # Find the active trading connection for this user
+            connection = next(
+                (
+                    c
+                    for c in user.exchange_connections
+                    if c.can_trade and c.status == ExchangeConnectionStatus.ACTIVE
+                ),
+                None,
+            )
+            if not connection:
+                continue
+
+            try:
+                trade = await executor.execute_signal(
+                    user=user,
+                    exchange_connection=connection,
+                    signal=signal,
+                )
+
+                if (
+                    user.telegram_connection
+                    and user.telegram_connection.is_verified
+                    and user.telegram_connection.trade_notifications
+                ):
+                    try:
+                        await telegram_service.send_trade_opened_notification(
+                            user.telegram_connection, trade
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to send trade notification for user {user.id}: {e}")
+
+                logger.info(f"Binance trade executed for user {user.id}: {trade.id}")
+
+            except RiskLimitError as e:
+                # Risk rejections are expected — log as info, not error
+                logger.info(
+                    f"Binance signal {signal_id} rejected by risk management "
+                    f"for user {user.id}: {e.detail}"
+                )
+                continue
+
+            except Exception as e:
+                logger.error(
+                    f"Failed to auto-execute Binance signal for user {user.id}: {e}",
+                    exc_info=True,
+                )
+                continue
+
+        await db.commit()
+
+
+@celery_app.task(bind=True)
+def monitor_binance_tpsl(self):
+    """Monitor Binance trades for TP/SL fills and cancel the remaining order."""
+    try:
+        asyncio.run(_monitor_binance_tpsl())
+    except Exception as e:
+        logger.error(f"Binance TP/SL monitoring failed: {e}")
+        raise
+
+
+async def _monitor_binance_tpsl():
+    from datetime import UTC, datetime
+
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from app.models import Trade, TradeCloseReason, TradeStatus
+    from app.models.exchange_connection import ExchangeConnection
+    from app.services.binance import create_binance_exchange_service, get_binance_info_service
+    from app.services.binance.utils import to_binance_symbol
+    from app.services.telegram_service import TelegramService
+    from app.workers.database import get_worker_db
+
+    async with get_worker_db() as db:
+        # Get all open Binance trades with TP/SL orders
+        result = await db.execute(
+            select(Trade)
+            .options(
+                selectinload(Trade.user),
+                selectinload(Trade.exchange_connection),
+            )
+            .where(
+                Trade.exchange == "binance",
+                Trade.status == TradeStatus.OPEN,
+            )
+        )
+        trades = list(result.scalars().all())
+
+        if not trades:
+            return
+
+        info_service = get_binance_info_service()
+        telegram_service = TelegramService(db)
+        closed_count = 0
+
+        for trade in trades:
+            if not trade.exchange_connection:
+                continue
+
+            binance_symbol = to_binance_symbol(trade.symbol)
+
+            try:
+                # Check if TP or SL has been filled by querying open algo orders
+                binance_exchange = await create_binance_exchange_service(trade.exchange_connection)
+
+                try:
+                    open_algos = await binance_exchange.get_algo_open_orders(binance_symbol)
+                except Exception:
+                    open_algos = []
+                finally:
+                    await binance_exchange.close()
+
+                open_algo_ids = {str(o.get("algoId", "")) for o in open_algos}
+
+                tp_active = trade.tp_order_id and trade.tp_order_id in open_algo_ids
+                sl_active = trade.sl_order_id and trade.sl_order_id in open_algo_ids
+
+                close_reason = None
+
+                if trade.tp_order_id and trade.sl_order_id:
+                    if not tp_active and sl_active:
+                        # TP was filled, cancel SL
+                        close_reason = TradeCloseReason.TP_HIT
+                    elif tp_active and not sl_active:
+                        # SL was filled, cancel TP
+                        close_reason = TradeCloseReason.SL_HIT
+                    elif not tp_active and not sl_active:
+                        # Both gone — position closed externally
+                        close_reason = TradeCloseReason.SYSTEM
+                    # else: both still active, nothing to do
+
+                if close_reason:
+                    # Cancel the remaining order
+                    binance_exchange = await create_binance_exchange_service(
+                        trade.exchange_connection
+                    )
+                    try:
+                        if close_reason == TradeCloseReason.TP_HIT and trade.sl_order_id:
+                            try:
+                                await binance_exchange.cancel_algo_order(
+                                    binance_symbol, int(trade.sl_order_id)
+                                )
+                            except Exception as e:
+                                logger.warning(f"Failed to cancel SL order: {e}")
+
+                        elif close_reason == TradeCloseReason.SL_HIT and trade.tp_order_id:
+                            try:
+                                await binance_exchange.cancel_algo_order(
+                                    binance_symbol, int(trade.tp_order_id)
+                                )
+                            except Exception as e:
+                                logger.warning(f"Failed to cancel TP order: {e}")
+                    finally:
+                        await binance_exchange.close()
+
+                    # Get exit price
+                    try:
+                        market_data = await info_service.get_market_data(binance_symbol)
+                        exit_price = market_data.get("mark_price", 0)
+                    except Exception:
+                        exit_price = 0
+
+                    trade.exit_price = exit_price
+                    trade.status = TradeStatus.CLOSED
+                    trade.close_reason = close_reason
+                    trade.closed_at = datetime.now(UTC)
+
+                    # Calculate PnL
+                    if trade.entry_price and exit_price:
+                        from app.models import TradeDirection
+
+                        if trade.direction == TradeDirection.LONG:
+                            pnl = (exit_price - float(trade.entry_price)) * float(
+                                trade.position_size
+                            )
+                            pnl_pct = (
+                                (exit_price - float(trade.entry_price))
+                                / float(trade.entry_price)
+                                * 100
+                            )
+                        else:
+                            pnl = (float(trade.entry_price) - exit_price) * float(
+                                trade.position_size
+                            )
+                            pnl_pct = (
+                                (float(trade.entry_price) - exit_price)
+                                / float(trade.entry_price)
+                                * 100
+                            )
+
+                        trade.realized_pnl = pnl * trade.leverage
+                        trade.realized_pnl_percent = pnl_pct * trade.leverage
+
+                    closed_count += 1
+
+                    logger.info(
+                        f"Binance trade {trade.id} closed: {close_reason.value} "
+                        f"exit_price={exit_price}"
+                    )
+
+                    # Send Telegram notification
+                    if (
+                        trade.user
+                        and hasattr(trade.user, "telegram_connection")
+                        and trade.user.telegram_connection
+                        and trade.user.telegram_connection.is_verified
+                    ):
+                        try:
+                            await telegram_service.send_trade_closed_notification(
+                                trade.user.telegram_connection, trade
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to send close notification: {e}")
+
+            except Exception as e:
+                logger.error(f"Error monitoring Binance trade {trade.id}: {e}", exc_info=True)
+                continue
+
+        if closed_count > 0:
+            await db.commit()
+            logger.info(f"Binance TP/SL monitor: closed {closed_count} trades")
+
+
+@celery_app.task(bind=True)
+def sync_binance_positions(self):
+    """Sync balance for all active Binance exchange connections."""
+    try:
+        asyncio.run(_sync_binance_positions())
+    except Exception as e:
+        logger.error(f"Binance position sync failed: {e}")
+        raise
+
+
+async def _sync_binance_positions():
+    from sqlalchemy import select
+
+    from app.models.exchange_connection import ExchangeConnection, ExchangeConnectionStatus
+    from app.services.exchange_connection_service import ExchangeConnectionService
+    from app.workers.database import get_worker_db
+
+    async with get_worker_db() as db:
+        result = await db.execute(
+            select(ExchangeConnection).where(
+                ExchangeConnection.status == ExchangeConnectionStatus.ACTIVE,
+            )
+        )
+        connections = list(result.scalars().all())
+
+        if not connections:
+            return
+
+        service = ExchangeConnectionService(db)
+        synced = 0
+
+        for connection in connections:
+            try:
+                await service.sync_balance(connection)
+                synced += 1
+            except Exception as e:
+                logger.error(f"Failed to sync Binance connection {connection.id}: {e}")
+                continue
+
+        await db.commit()
+
+        if synced > 0:
+            logger.info(f"Synced {synced}/{len(connections)} Binance connections")

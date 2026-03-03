@@ -34,10 +34,32 @@ async def lifespan(app: FastAPI):
     top_gainers_service = get_top_gainers_service()
     await top_gainers_service.start()
 
+    # Start Binance price service (for live Binance mark prices)
+    from app.services.binance.price_service import get_binance_price_service
+
+    binance_price_service = get_binance_price_service()
+    await binance_price_service.start()
+
+    # Start trade stream service (real-time trade updates via WebSocket)
+    from app.services.trade_stream_service import get_trade_stream_service
+
+    trade_stream_service = get_trade_stream_service()
+    await trade_stream_service.start()
+
     logger.info("Application startup complete")
     yield
 
     logger.info("Shutting down StackAlpha Backend...")
+
+    # Stop trade stream service
+    from app.services.trade_stream_service import close_trade_stream_service
+
+    await close_trade_stream_service()
+
+    # Stop Binance price service
+    from app.services.binance.price_service import close_binance_price_service
+
+    await close_binance_price_service()
 
     # Stop top gainers service
     from app.services.top_gainers_service import close_top_gainers_service

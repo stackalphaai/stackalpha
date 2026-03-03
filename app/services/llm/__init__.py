@@ -1,5 +1,10 @@
 from app.services.llm.analyzer import MarketAnalyzer, get_market_analyzer
-from app.services.llm.consensus import ConsensusEngine, get_consensus_engine
+from app.services.llm.binance_analyzer import BinanceMarketAnalyzer, get_binance_market_analyzer
+from app.services.llm.consensus import (
+    ConsensusEngine,
+    get_binance_consensus_engine,
+    get_consensus_engine,
+)
 from app.services.llm.openrouter import (
     OpenRouterClient,
     close_openrouter_client,
@@ -14,4 +19,7 @@ __all__ = [
     "get_market_analyzer",
     "ConsensusEngine",
     "get_consensus_engine",
+    "get_binance_consensus_engine",
+    "BinanceMarketAnalyzer",
+    "get_binance_market_analyzer",
 ]

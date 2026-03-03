@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models import Signal, SignalDirection, SignalOutcome, SignalStatus
 from app.schemas.common import PaginationParams
-from app.services.llm import get_consensus_engine
+from app.services.llm import get_binance_consensus_engine, get_consensus_engine
 
 logger = logging.getLogger(__name__)
 
@@ -17,14 +17,20 @@ class SignalService:
         self.db = db
         self.consensus_engine = get_consensus_engine()
 
-    async def generate_signal(self, symbol: str) -> Signal | None:
-        signal_data = await self.consensus_engine.generate_signal(symbol)
+    async def generate_signal(self, symbol: str, exchange: str = "hyperliquid") -> Signal | None:
+        if exchange == "binance":
+            consensus_engine = get_binance_consensus_engine()
+        else:
+            consensus_engine = self.consensus_engine
+
+        signal_data = await consensus_engine.generate_signal(symbol)
 
         if not signal_data:
             return None
 
         signal = Signal(
             symbol=signal_data["symbol"],
+            exchange=exchange,
             direction=signal_data["direction"],
             status=SignalStatus.ACTIVE,
             outcome=SignalOutcome.PENDING,
@@ -72,6 +78,7 @@ class SignalService:
         symbol: str | None = None,
         direction: SignalDirection | None = None,
         status: SignalStatus | None = None,
+        exchange: str | None = None,
     ) -> tuple[list[Signal], int]:
         query = select(Signal)
 
@@ -81,6 +88,8 @@ class SignalService:
             query = query.where(Signal.direction == direction)
         if status:
             query = query.where(Signal.status == status)
+        if exchange:
+            query = query.where(Signal.exchange == exchange)
 
         count_result = await self.db.execute(select(func.count()).select_from(query.subquery()))
         total = count_result.scalar() or 0

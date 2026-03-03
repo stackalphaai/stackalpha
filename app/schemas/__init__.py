@@ -24,6 +24,13 @@ from app.schemas.auth import (
     Verify2FARequest,
     VerifyEmailRequest,
 )
+from app.schemas.exchange import (
+    ConnectExchangeRequest,
+    ExchangeBalanceResponse,
+    ExchangeConnectionResponse,
+    ExchangeSyncResponse,
+    ToggleExchangeTradingRequest,
+)
 from app.schemas.common import (
     ErrorResponse,
     HealthResponse,
@@ -106,6 +113,12 @@ __all__ = [
     "UserListResponse",
     "AdminUserUpdate",
     "UserStatsResponse",
+    # Exchange
+    "ConnectExchangeRequest",
+    "ExchangeConnectionResponse",
+    "ExchangeBalanceResponse",
+    "ExchangeSyncResponse",
+    "ToggleExchangeTradingRequest",
     # Wallet
     "ConnectWalletRequest",
     "AuthorizeWalletRequest",
