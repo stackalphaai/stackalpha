@@ -1,8 +1,6 @@
 import logging
 from typing import Any
 
-from binance import AsyncClient
-
 from app.core.exceptions import BinanceAPIError
 from app.services.binance.client import BinanceClient
 

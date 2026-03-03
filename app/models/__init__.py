@@ -1,14 +1,14 @@
-from app.models.exchange_connection import (
-    ExchangeConnection,
-    ExchangeConnectionStatus,
-    ExchangeType,
-)
 from app.models.affiliate import (
     Affiliate,
     AffiliateCommission,
     AffiliatePayout,
     AffiliateReferral,
     PayoutStatus,
+)
+from app.models.exchange_connection import (
+    ExchangeConnection,
+    ExchangeConnectionStatus,
+    ExchangeType,
 )
 from app.models.notification import (
     EmailTemplate,

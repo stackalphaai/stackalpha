@@ -24,19 +24,19 @@ from app.schemas.auth import (
     Verify2FARequest,
     VerifyEmailRequest,
 )
-from app.schemas.exchange import (
-    ConnectExchangeRequest,
-    ExchangeBalanceResponse,
-    ExchangeConnectionResponse,
-    ExchangeSyncResponse,
-    ToggleExchangeTradingRequest,
-)
 from app.schemas.common import (
     ErrorResponse,
     HealthResponse,
     PaginatedResponse,
     PaginationParams,
     SuccessResponse,
+)
+from app.schemas.exchange import (
+    ConnectExchangeRequest,
+    ExchangeBalanceResponse,
+    ExchangeConnectionResponse,
+    ExchangeSyncResponse,
+    ToggleExchangeTradingRequest,
 )
 from app.schemas.subscription import (
     CancelSubscriptionRequest,

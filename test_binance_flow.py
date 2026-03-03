@@ -9,7 +9,6 @@ Steps:
 """
 
 import asyncio
-import json
 import logging
 import os
 import sys
@@ -110,7 +109,7 @@ async def step2_fetch_top_gainer(testnet_symbols=None):
             await info_service.close()
             return None, info_service
 
-        print(f"\n  Top 5 Gainers (mainnet):")
+        print("\n  Top 5 Gainers (mainnet):")
         for i, g in enumerate(gainers[:5], 1):
             print(
                 f"    {i}. {g['symbol']}: {g['price_change_percent_24h']:+.2f}% | Price: ${g['price']:,.4f} | Vol: ${g['volume_24h']:,.0f}"
@@ -118,7 +117,7 @@ async def step2_fetch_top_gainer(testnet_symbols=None):
 
         # Well-known pairs that reliably exist on testnet with proper candle data
         # Prefer cheaper ones (low min notional) so $5.69 balance can trade
-        RELIABLE_TESTNET_PAIRS = {
+        reliable_testnet_pairs = {
             "XRPUSDT",
             "DOGEUSDT",
             "ADAUSDT",
@@ -143,7 +142,7 @@ async def step2_fetch_top_gainer(testnet_symbols=None):
 
         # Filter for testnet-available AND well-known pairs (to ensure good candle data)
         if testnet_symbols:
-            reliable_set = testnet_symbols & RELIABLE_TESTNET_PAIRS
+            reliable_set = testnet_symbols & reliable_testnet_pairs
             available_gainers = [g for g in gainers if g["symbol"] in reliable_set]
             if available_gainers:
                 top_gainer = available_gainers[0]
@@ -181,8 +180,8 @@ async def step3_generate_signal(symbol: str, info_service):
     print(f"STEP 3: Generating Signal for {symbol}")
     print("=" * 60)
 
-    from app.services.llm.binance_analyzer import BinanceMarketAnalyzer
     from app.services.binance.utils import to_binance_symbol
+    from app.services.llm.binance_analyzer import BinanceMarketAnalyzer
 
     binance_symbol = to_binance_symbol(symbol)
     analyzer = BinanceMarketAnalyzer()
@@ -212,7 +211,7 @@ async def step3_generate_signal(symbol: str, info_service):
     print(f"  Funding Rate: {market_data.get('funding_rate', 0):.6f}")
 
     # Run consensus engine with LLM analysis
-    print(f"\n  Running LLM consensus analysis (this may take 30-60s)...")
+    print("\n  Running LLM consensus analysis (this may take 30-60s)...")
 
     from app.services.llm.consensus import ConsensusEngine
 
@@ -264,7 +263,7 @@ async def step3_generate_signal(symbol: str, info_service):
             "analysis_data": {"key_factors": ["RSI-based fallback signal for testing"]},
         }
 
-    print(f"\n  Signal Generated:")
+    print("\n  Signal Generated:")
     print(f"    Direction:   {signal_data.get('direction', 'N/A')}")
     print(f"    Entry:       ${signal_data.get('entry_price', 0):.4f}")
     print(f"    Take Profit: ${signal_data.get('take_profit_price', 0):.4f}")
@@ -281,7 +280,7 @@ async def step3_generate_signal(symbol: str, info_service):
 async def step4_execute_trade(exchange, signal_data, balance):
     """Step 4: Execute the trade on Binance Futures testnet."""
     print("\n" + "=" * 60)
-    print(f"STEP 4: Executing Trade on Binance Testnet")
+    print("STEP 4: Executing Trade on Binance Testnet")
     print("=" * 60)
 
     from app.services.binance.info import BinanceInfoService
@@ -316,7 +315,7 @@ async def step4_execute_trade(exchange, signal_data, balance):
     info = BinanceInfoService()
     try:
         precision = await info.get_symbol_precision(binance_symbol)
-        print(f"\n  Symbol Precision:")
+        print("\n  Symbol Precision:")
         print(f"    Quantity: {precision['quantity_precision']} decimals")
         print(f"    Price:    {precision['price_precision']} decimals")
         print(f"    Min Qty:  {precision['min_qty']}")
@@ -353,7 +352,7 @@ async def step4_execute_trade(exchange, signal_data, balance):
         print(f"    Warning: {e}")
 
     # 2. Set margin type to CROSSED
-    print(f"  [2/4] Setting margin type to CROSSED...")
+    print("  [2/4] Setting margin type to CROSSED...")
     try:
         margin_result = await exchange.set_margin_type(binance_symbol, "CROSSED")
         print(f"    OK: {margin_result}")
@@ -401,7 +400,7 @@ async def step4_execute_trade(exchange, signal_data, balance):
         print(f"    WARNING: SL order failed: {e}")
 
     # Verify position
-    print(f"\n  Verifying position...")
+    print("\n  Verifying position...")
     positions = await exchange.get_positions()
     pos = next((p for p in positions if p["symbol"] == binance_symbol), None)
     if pos:
@@ -409,10 +408,10 @@ async def step4_execute_trade(exchange, signal_data, balance):
             f"    Position confirmed: size={pos['size']}, entry=${pos['entry_price']:.4f}, leverage={pos['leverage']}x"
         )
     else:
-        print(f"    WARNING: Position not found (may still be settling)")
+        print("    WARNING: Position not found (may still be settling)")
 
     # Check open orders
-    print(f"\n  Checking open orders...")
+    print("\n  Checking open orders...")
     try:
         open_orders = await exchange.get_open_orders(binance_symbol)
         print(f"    Open orders: {len(open_orders)}")

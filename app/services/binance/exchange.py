@@ -254,7 +254,7 @@ class BinanceExchangeService:
             c = await self.client.get_client()
             # Try cancelling as regular order first (for standard TP/SL)
             return await c.futures_cancel_order(symbol=symbol, orderId=algo_order_id)
-        except Exception as e:
+        except Exception:
             # If regular cancel fails, try algo cancel endpoint
             try:
                 base_url = self._get_futures_base_url()
