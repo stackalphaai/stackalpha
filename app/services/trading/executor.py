@@ -9,7 +9,6 @@ from app.core.exceptions import (
     BadRequestError,
     HyperliquidAPIError,
     InsufficientBalanceError,
-    PositionLimitError,
     RiskLimitError,
     TradingDisabledError,
 )

@@ -5,7 +5,7 @@ from typing import Any
 from app.config import settings
 from app.models import SignalDirection
 from app.services.hyperliquid import get_info_service
-from app.services.llm.analyzer import MarketAnalyzer, get_market_analyzer
+from app.services.llm.analyzer import get_market_analyzer
 
 logger = logging.getLogger(__name__)
 

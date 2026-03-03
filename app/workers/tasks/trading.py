@@ -333,7 +333,6 @@ async def _monitor_binance_tpsl():
     from sqlalchemy.orm import selectinload
 
     from app.models import Trade, TradeCloseReason, TradeStatus
-    from app.models.exchange_connection import ExchangeConnection
     from app.services.binance import create_binance_exchange_service, get_binance_info_service
     from app.services.binance.utils import to_binance_symbol
     from app.services.telegram_service import TelegramService
