@@ -28,7 +28,7 @@ def generate_uuid() -> str:
 
 
 class WalletType(str, Enum):
-    MASTER = "master"
+    AGENT = "agent"
     API = "api"
 
 
@@ -48,9 +48,7 @@ class Wallet(Base):
     )
 
     address: Mapped[str] = mapped_column(String(42), nullable=False, index=True)
-    wallet_type: Mapped[WalletType] = mapped_column(
-        SQLEnum(WalletType), default=WalletType.MASTER, nullable=False
-    )
+    wallet_type: Mapped[WalletType] = mapped_column(SQLEnum(WalletType), nullable=False)
     status: Mapped[WalletStatus] = mapped_column(
         SQLEnum(WalletStatus), default=WalletStatus.PENDING, nullable=False
     )
@@ -89,7 +87,7 @@ class Wallet(Base):
 
     @property
     def can_trade(self) -> bool:
-        if self.wallet_type == WalletType.API:
+        if self.wallet_type == WalletType.AGENT:
             return self.is_active and self.is_trading_enabled and self.is_agent_approved
         return self.is_active and self.is_trading_enabled
 
@@ -97,7 +95,7 @@ class Wallet(Base):
     def query_address(self) -> str:
         """Address to use for Hyperliquid balance/position queries.
 
-        For API wallets this is the master wallet that holds the funds.
-        For master wallets this is the wallet's own address.
+        For agent wallets this is the master wallet that holds the funds.
+        For API wallets this is the wallet's own address.
         """
         return self.master_address or self.address

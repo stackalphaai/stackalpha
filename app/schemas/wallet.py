@@ -8,13 +8,15 @@ from app.schemas.common import BaseSchema, TimestampMixin
 
 class WalletBase(BaseSchema):
     address: str = Field(..., min_length=42, max_length=42)
-    wallet_type: WalletType = WalletType.MASTER
+    wallet_type: WalletType
 
 
-class ConnectWalletRequest(BaseModel):
+class ConnectAgentWalletRequest(BaseModel):
     address: str = Field(..., min_length=42, max_length=42)
+    private_key: str = Field(..., min_length=1)
+    master_address: str = Field(..., min_length=42, max_length=42)
 
-    @field_validator("address")
+    @field_validator("address", "master_address")
     @classmethod
     def validate_address(cls, v: str) -> str:
         if not v.startswith("0x"):
@@ -22,17 +24,13 @@ class ConnectWalletRequest(BaseModel):
         return v.lower()
 
 
-class AuthorizeWalletRequest(BaseModel):
-    signature: str
-    message: str
+class ConnectAPIWalletRequest(BaseModel):
+    address: str = Field(..., min_length=42, max_length=42)
+    private_key: str = Field(..., min_length=1)
 
-
-class GenerateAPIWalletRequest(BaseModel):
-    master_address: str = Field(..., min_length=42, max_length=42)
-
-    @field_validator("master_address")
+    @field_validator("address")
     @classmethod
-    def validate_master_address(cls, v: str) -> str:
+    def validate_address(cls, v: str) -> str:
         if not v.startswith("0x"):
             raise ValueError("Invalid Ethereum address format")
         return v.lower()
@@ -81,13 +79,6 @@ class WalletSyncResponse(BaseSchema):
 
 class EnableTradingRequest(BaseModel):
     enabled: bool = True
-
-
-class APIWalletResponse(BaseSchema):
-    address: str
-    master_address: str
-    private_key: str
-    message: str = "Store this private key securely. It will not be shown again."
 
 
 class WalletTransferRequest(BaseModel):

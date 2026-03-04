@@ -1,13 +1,11 @@
 import logging
 from datetime import UTC, datetime
 
-from eth_account import Account
-from eth_account.messages import encode_defunct
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from web3 import Web3
 
-from app.core.exceptions import BadRequestError, ConflictError, InvalidWalletError
+from app.core.exceptions import BadRequestError, ConflictError
 from app.core.security import decrypt_data, encrypt_data
 from app.models import User, Wallet, WalletStatus, WalletType
 
@@ -19,17 +17,12 @@ class WalletService:
         self.db = db
         self.w3 = Web3()
 
-    async def connect_wallet(
-        self,
-        user: User,
-        address: str,
-    ) -> Wallet:
-        address = Web3.to_checksum_address(address.lower())
-
+    async def _check_address_conflict(self, address: str, user_id: str) -> Wallet | None:
+        """Check if address is already connected to another user, return existing if same user."""
         result = await self.db.execute(
             select(Wallet).where(
                 Wallet.address == address.lower(),
-                Wallet.user_id != user.id,
+                Wallet.user_id != user_id,
             )
         )
         if result.scalar_one_or_none():
@@ -38,20 +31,37 @@ class WalletService:
         result = await self.db.execute(
             select(Wallet).where(
                 Wallet.address == address.lower(),
-                Wallet.user_id == user.id,
+                Wallet.user_id == user_id,
             )
         )
-        existing = result.scalar_one_or_none()
+        return result.scalar_one_or_none()
+
+    async def connect_agent_wallet(
+        self,
+        user: User,
+        address: str,
+        private_key: str,
+        master_address: str,
+    ) -> Wallet:
+        address = Web3.to_checksum_address(address.lower()).lower()
+        master_address = Web3.to_checksum_address(master_address.lower()).lower()
+
+        existing = await self._check_address_conflict(address, user.id)
         if existing:
             return existing
 
+        encrypted_key = encrypt_data(private_key)
+
         wallet = Wallet(
             user_id=user.id,
-            address=address.lower(),
-            wallet_type=WalletType.MASTER,
-            status=WalletStatus.PENDING,
+            address=address,
+            wallet_type=WalletType.AGENT,
+            status=WalletStatus.ACTIVE,
+            encrypted_private_key=encrypted_key,
+            master_address=master_address,
             is_trading_enabled=False,
-            is_authorized=False,
+            is_authorized=True,
+            is_agent_approved=False,
         )
 
         self.db.add(wallet)
@@ -60,41 +70,17 @@ class WalletService:
 
         return wallet
 
-    async def authorize_wallet(
+    async def connect_api_wallet(
         self,
-        wallet: Wallet,
-        signature: str,
-        message: str,
+        user: User,
+        address: str,
+        private_key: str,
     ) -> Wallet:
-        if wallet.is_authorized:
-            raise BadRequestError("Wallet is already authorized")
+        address = Web3.to_checksum_address(address.lower()).lower()
 
-        expected_message = self._get_authorization_message(wallet.address)
-        if message != expected_message:
-            raise InvalidWalletError("Invalid authorization message")
-
-        try:
-            message_hash = encode_defunct(text=message)
-            recovered_address = Account.recover_message(message_hash, signature=signature)
-
-            if recovered_address.lower() != wallet.address.lower():
-                raise InvalidWalletError("Signature does not match wallet address")
-
-        except Exception as e:
-            raise InvalidWalletError(f"Invalid signature: {str(e)}") from e
-
-        wallet.is_authorized = True
-        wallet.authorization_signature = signature
-        wallet.status = WalletStatus.ACTIVE
-
-        return wallet
-
-    async def generate_api_wallet(self, user: User, master_address: str) -> tuple[Wallet, str]:
-        master_address = Web3.to_checksum_address(master_address.lower()).lower()
-
-        account = Account.create()
-        address = account.address.lower()
-        private_key = account.key.hex()
+        existing = await self._check_address_conflict(address, user.id)
+        if existing:
+            return existing
 
         encrypted_key = encrypt_data(private_key)
 
@@ -104,21 +90,19 @@ class WalletService:
             wallet_type=WalletType.API,
             status=WalletStatus.ACTIVE,
             encrypted_private_key=encrypted_key,
-            master_address=master_address,
             is_trading_enabled=True,
             is_authorized=True,
-            is_agent_approved=False,
         )
 
         self.db.add(wallet)
         await self.db.flush()
         await self.db.refresh(wallet)
 
-        return wallet, private_key
+        return wallet
 
     async def verify_agent_approval(self, wallet: Wallet) -> bool:
-        if wallet.wallet_type != WalletType.API:
-            raise BadRequestError("Only API wallets need agent approval")
+        if wallet.wallet_type != WalletType.AGENT:
+            raise BadRequestError("Only agent wallets need agent approval")
 
         if not wallet.master_address:
             raise BadRequestError("Wallet has no master address configured")
@@ -223,16 +207,6 @@ class WalletService:
         if not wallet.encrypted_private_key:
             return None
         return decrypt_data(wallet.encrypted_private_key)
-
-    def _get_authorization_message(self, address: str) -> str:
-        return (
-            f"Sign this message to authorize StackAlpha to manage trades on your behalf.\n\n"
-            f"Wallet: {address}\n"
-            f"This will NOT give access to transfer your funds."
-        )
-
-    def get_authorization_message(self, address: str) -> str:
-        return self._get_authorization_message(address)
 
     async def delete_wallet(self, wallet: Wallet) -> bool:
         await self.db.delete(wallet)

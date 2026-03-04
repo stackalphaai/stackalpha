@@ -72,11 +72,9 @@ from app.schemas.user import (
     UserUpdate,
 )
 from app.schemas.wallet import (
-    APIWalletResponse,
-    AuthorizeWalletRequest,
-    ConnectWalletRequest,
+    ConnectAgentWalletRequest,
+    ConnectAPIWalletRequest,
     EnableTradingRequest,
-    GenerateAPIWalletRequest,
     WalletBalanceResponse,
     WalletPositionResponse,
     WalletResponse,
@@ -120,15 +118,13 @@ __all__ = [
     "ExchangeSyncResponse",
     "ToggleExchangeTradingRequest",
     # Wallet
-    "ConnectWalletRequest",
-    "AuthorizeWalletRequest",
-    "GenerateAPIWalletRequest",
+    "ConnectAgentWalletRequest",
+    "ConnectAPIWalletRequest",
     "WalletResponse",
     "WalletBalanceResponse",
     "WalletPositionResponse",
     "WalletSyncResponse",
     "EnableTradingRequest",
-    "APIWalletResponse",
     "WalletTransferRequest",
     "WalletTransferResponse",
     # Trading

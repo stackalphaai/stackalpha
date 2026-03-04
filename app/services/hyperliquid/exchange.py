@@ -1,10 +1,10 @@
-import hashlib
-import json
 import logging
 import time
 from typing import Any
 
+import msgpack
 from eth_account import Account
+from eth_hash.auto import keccak
 
 from app.config import settings
 from app.core.exceptions import HyperliquidAPIError
@@ -22,6 +22,25 @@ class HyperliquidExchangeService:
     def _get_timestamp(self) -> int:
         return int(time.time() * 1000)
 
+    def _action_hash(
+        self,
+        action: dict[str, Any],
+        nonce: int,
+        vault_address: str | None = None,
+    ) -> bytes:
+        """Compute action hash per the official Hyperliquid SDK.
+
+        Uses msgpack serialization + nonce + vault_address, hashed with keccak256.
+        """
+        data = msgpack.packb(action)
+        data += nonce.to_bytes(8, "big")
+        if vault_address is None:
+            data += b"\x00"
+        else:
+            data += b"\x01"
+            data += bytes.fromhex(vault_address[2:])
+        return keccak(data)
+
     def _sign_l1_action(
         self,
         private_key: str,
@@ -29,20 +48,18 @@ class HyperliquidExchangeService:
         nonce: int,
         vault_address: str | None = None,
     ) -> str:
-        connection_id = hashlib.sha256(
-            json.dumps(action, separators=(",", ":"), sort_keys=True).encode()
-        ).digest()[:20]
+        connection_id = self._action_hash(action, nonce, vault_address)
 
         phantom_agent = {
             "source": "a" if self.is_mainnet else "b",
-            "connectionId": connection_id.hex(),
+            "connectionId": connection_id,
         }
 
         data = {
             "domain": {
                 "name": "Exchange",
                 "version": "1",
-                "chainId": 1 if self.is_mainnet else 421614,
+                "chainId": 1337,
                 "verifyingContract": "0x0000000000000000000000000000000000000000",
             },
             "types": {
@@ -54,7 +71,7 @@ class HyperliquidExchangeService:
                 ],
                 "Agent": [
                     {"name": "source", "type": "string"},
-                    {"name": "connectionId", "type": "bytes20"},
+                    {"name": "connectionId", "type": "bytes32"},
                 ],
             },
             "primaryType": "Agent",
