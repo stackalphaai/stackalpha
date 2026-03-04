@@ -8,6 +8,8 @@ Create Date: 2026-03-03
 
 from collections.abc import Sequence
 
+from sqlalchemy import text
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -18,14 +20,24 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # Add 'agent' to the enum, update rows, remove 'master'
-    # PostgreSQL requires explicit enum manipulation
+    # Add 'agent' to the enum if it doesn't exist yet
     op.execute("ALTER TYPE wallettype ADD VALUE IF NOT EXISTS 'agent'")
 
-    # Update existing master wallets to agent
-    op.execute("UPDATE wallets SET wallet_type = 'agent' WHERE wallet_type = 'master'")
+    # Update existing master wallets to agent (only if 'master' exists in the enum)
+    conn = op.get_bind()
+    result = conn.execute(
+        text(
+            "SELECT EXISTS ("
+            "  SELECT 1 FROM pg_enum "
+            "  WHERE enumtypid = 'wallettype'::regtype AND enumlabel = 'master'"
+            ")"
+        )
+    )
+    has_master = result.scalar()
+    if has_master:
+        conn.execute(text("UPDATE wallets SET wallet_type = 'agent' WHERE wallet_type = 'master'"))
 
 
 def downgrade() -> None:
-    # Revert agent wallets back to master
+    op.execute("ALTER TYPE wallettype ADD VALUE IF NOT EXISTS 'master'")
     op.execute("UPDATE wallets SET wallet_type = 'master' WHERE wallet_type = 'agent'")
