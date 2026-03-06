@@ -51,11 +51,17 @@ class BinanceExchangeService:
         }
 
     async def get_positions(self) -> list[dict[str, Any]]:
-        """Get open positions (non-zero)."""
-        account = await self.get_account_info()
+        """Get open positions (non-zero) with mark prices."""
+        try:
+            c = await self.client.get_client()
+            # futures_position_information includes markPrice, unlike futures_account positions
+            all_positions = await c.futures_position_information()
+        except Exception as e:
+            logger.error(f"Failed to get position information: {e}")
+            raise BinanceAPIError(f"Failed to get positions: {e}") from e
 
         positions = []
-        for pos in account.get("positions", []):
+        for pos in all_positions:
             size = float(pos.get("positionAmt", 0))
             if size == 0:
                 continue
@@ -65,7 +71,7 @@ class BinanceExchangeService:
                     "size": size,
                     "entry_price": float(pos.get("entryPrice", 0)),
                     "mark_price": float(pos.get("markPrice", 0)),
-                    "unrealized_pnl": float(pos.get("unrealizedProfit", 0)),
+                    "unrealized_pnl": float(pos.get("unRealizedProfit", 0)),
                     "leverage": int(pos.get("leverage", 1)),
                     "margin_type": pos.get("marginType", "cross"),
                     "notional": float(pos.get("notional", 0)),

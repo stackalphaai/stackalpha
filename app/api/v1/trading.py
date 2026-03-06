@@ -281,7 +281,7 @@ async def close_trade(
         trade = await binance_executor.close_trade(trade, connection, data.reason)
     else:
         wallet_service = WalletService(db)
-        wallet = await wallet_service.get_wallet_by_id(trade.wallet_id)
+        wallet = await wallet_service.get_wallet_by_id(trade.wallet_id, current_user.id)
 
         executor = TradeExecutor(db)
         trade = await executor.close_trade(trade, wallet, data.reason)

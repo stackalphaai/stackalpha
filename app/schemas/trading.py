@@ -59,7 +59,7 @@ class CreateTradeRequest(BaseModel):
 
 
 class ExecuteSignalRequest(BaseModel):
-    signal_id: str
+    signal_id: str | None = None  # Ignored: signal_id comes from the URL path parameter
     wallet_id: str | None = None
     exchange_connection_id: str | None = None
     position_size_percent: float | None = Field(None, gt=0, le=100)

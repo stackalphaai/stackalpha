@@ -92,28 +92,21 @@ class BinanceInfoService:
         try:
             client = await self._client.get_client()
 
-            ticker = await client.futures_symbol_ticker(symbol=symbol)
+            # futures_mark_price returns actual mark price, index price, and funding rate in one call
+            mark_price_info = await client.futures_mark_price(symbol=symbol)
             ticker_24h = await client.futures_ticker(symbol=symbol)
 
-            result = {
+            return {
                 "symbol": symbol,
-                "mark_price": float(ticker.get("price", 0)),
+                "mark_price": float(mark_price_info.get("markPrice", 0)),
+                "index_price": float(mark_price_info.get("indexPrice", 0)),
+                "funding_rate": float(mark_price_info.get("lastFundingRate", 0)),
                 "price_change_24h": float(ticker_24h.get("priceChange", 0)),
                 "price_change_percent_24h": float(ticker_24h.get("priceChangePercent", 0)),
                 "volume_24h": float(ticker_24h.get("quoteVolume", 0)),
                 "high_24h": float(ticker_24h.get("highPrice", 0)),
                 "low_24h": float(ticker_24h.get("lowPrice", 0)),
             }
-
-            # Try to get funding rate
-            try:
-                funding = await client.futures_funding_rate(symbol=symbol, limit=1)
-                if funding:
-                    result["funding_rate"] = float(funding[-1].get("fundingRate", 0))
-            except Exception:
-                result["funding_rate"] = 0.0
-
-            return result
         except Exception as e:
             logger.error(f"Failed to get market data for {symbol}: {e}")
             raise BinanceAPIError(f"Failed to get market data: {e}") from e

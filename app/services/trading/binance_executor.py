@@ -1,7 +1,6 @@
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -269,12 +268,3 @@ class BinanceTradeExecutor:
         )
 
         return trade
-
-    async def _count_open_trades(self, user_id: str) -> int:
-        result = await self.db.execute(
-            select(Trade).where(
-                Trade.user_id == user_id,
-                Trade.status.in_([TradeStatus.OPEN, TradeStatus.OPENING]),
-            )
-        )
-        return len(result.scalars().all())
