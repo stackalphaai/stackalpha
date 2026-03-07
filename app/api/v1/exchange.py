@@ -103,6 +103,7 @@ async def toggle_exchange_trading(
 
     connection = await service.toggle_trading(connection, data.enabled)
     await db.commit()
+    await db.refresh(connection)
     return connection
 
 

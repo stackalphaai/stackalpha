@@ -141,6 +141,7 @@ async def execute_signal(
         )
 
     await db.commit()
+    await db.refresh(trade)
     return trade
 
 
@@ -244,6 +245,7 @@ async def create_trade(
         stop_loss_price=data.stop_loss_price,
     )
     await db.commit()
+    await db.refresh(trade)
     return trade
 
 
@@ -287,6 +289,7 @@ async def close_trade(
         trade = await executor.close_trade(trade, wallet, data.reason)
 
     await db.commit()
+    await db.refresh(trade)
     return trade
 
 

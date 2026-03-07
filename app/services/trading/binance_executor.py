@@ -116,7 +116,6 @@ class BinanceTradeExecutor:
                 trade.error_message = str(e)
                 logger.error(f"Failed to execute Binance trade: {e}")
 
-            await self.db.refresh(trade)
             return trade
         finally:
             await binance_exchange.close()
