@@ -13,9 +13,6 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy import (
-    Enum as SQLEnum,
-)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -50,7 +47,7 @@ class ExchangeConnection(Base):
     )
 
     exchange_type: Mapped[ExchangeType] = mapped_column(
-        SQLEnum(ExchangeType, values_callable=lambda x: [e.value for e in x]),
+        String(20),
         nullable=False,
     )
     label: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -61,10 +58,7 @@ class ExchangeConnection(Base):
     is_testnet: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_trading_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     status: Mapped[ExchangeConnectionStatus] = mapped_column(
-        SQLEnum(
-            ExchangeConnectionStatus,
-            values_callable=lambda x: [e.value for e in x],
-        ),
+        String(20),
         default=ExchangeConnectionStatus.ACTIVE,
         nullable=False,
     )
