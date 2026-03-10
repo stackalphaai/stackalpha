@@ -28,6 +28,7 @@ def generate_uuid() -> str:
 
 
 class WalletType(str, Enum):
+    MASTER = "master"  # Legacy — kept for existing DB rows
     AGENT = "agent"
     API = "api"
 
