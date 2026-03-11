@@ -72,6 +72,13 @@ class RiskSettings(Base):
     # Circuit Breakers
     max_consecutive_losses: Mapped[int] = mapped_column(nullable=False, default=3)
     trading_paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    circuit_breaker_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="active", server_default="active"
+    )
+    paused_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paused_by: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    auto_resume_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Auto-Trading Features
     enable_trailing_stop: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

@@ -4,7 +4,7 @@ import logging
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -184,7 +184,10 @@ async def resume_trading(
 ):
     """Resume trading"""
     service = CircuitBreakerService(db)
-    await service.resume_trading(str(current_user.id))
+    try:
+        await service.resume_trading(str(current_user.id))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
 
     stats = await service.get_statistics(str(current_user.id))
     return stats
