@@ -38,6 +38,7 @@ class RiskLimits:
     # Position Sizing
     max_position_size_usd: float = 10000.0
     max_position_size_percent: float = 10.0  # % of portfolio
+    risk_percent_per_trade: float = 2.0  # % of equity risked per trade
     position_sizing_method: PositionSizingMethod = PositionSizingMethod.FIXED_PERCENT
 
     # Portfolio Limits
@@ -128,6 +129,7 @@ class RiskManagementService:
         return RiskLimits(
             max_position_size_usd=float(risk_settings.max_position_size_usd),
             max_position_size_percent=float(risk_settings.max_position_size_percent),
+            risk_percent_per_trade=float(risk_settings.risk_percent_per_trade),
             position_sizing_method=sizing_method_map.get(
                 risk_settings.position_sizing_method, PositionSizingMethod.FIXED_PERCENT
             ),
@@ -489,10 +491,15 @@ class RiskManagementService:
         stop_loss_price: float,
         take_profit_price: float,
         position_size_usd: float,
+        available_balance: float = 0,
     ) -> tuple[bool, str | None, int, float]:
         """
         Full pre-trade validation combining signal confidence, risk limits,
-        leverage clamping, and position sizing.
+        leverage clamping, and risk-based position sizing.
+
+        Uses risk_percent_per_trade to calculate position size based on
+        stop loss distance: if SL is hit, you lose exactly risk_percent_per_trade%
+        of equity.
 
         Returns:
             (approved, rejection_reason, clamped_leverage, clamped_position_size_usd)
@@ -512,8 +519,25 @@ class RiskManagementService:
         # 2. Clamp leverage to user's max
         clamped_leverage = max(1, min(proposed_leverage, limits.max_leverage))
 
-        # 3. Clamp position size to user's limits
-        clamped_size = min(position_size_usd, limits.max_position_size_usd)
+        # 3. Risk-based position sizing using risk_percent_per_trade
+        # Formula: risk_amount = equity * risk% => position_size = risk_amount / sl_distance%
+        # This ensures that if SL is hit, the loss equals risk_percent_per_trade% of equity.
+        equity = available_balance if available_balance > 0 else position_size_usd
+        stop_distance_pct = (
+            abs(entry_price - stop_loss_price) / entry_price if entry_price > 0 else 0
+        )
+
+        if stop_distance_pct > 0 and limits.risk_percent_per_trade > 0:
+            risk_amount = equity * (limits.risk_percent_per_trade / 100)
+            # Account for leverage: leveraged SL distance = stop_distance_pct * leverage
+            risk_based_size = risk_amount / (stop_distance_pct * clamped_leverage)
+            # Use risk-based size, but don't exceed the originally proposed size
+            clamped_size = min(risk_based_size, position_size_usd, limits.max_position_size_usd)
+        else:
+            clamped_size = min(position_size_usd, limits.max_position_size_usd)
+
+        # Ensure position size is positive
+        clamped_size = max(0, clamped_size)
 
         # 4. Run full trade validation
         direction = "long" if take_profit_price > entry_price else "short"

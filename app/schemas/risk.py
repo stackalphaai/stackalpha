@@ -10,6 +10,7 @@ class RiskSettingsResponse(BaseSchema):
     position_sizing_method: str
     max_position_size_usd: float
     max_position_size_percent: float
+    risk_percent_per_trade: float
 
     # Portfolio Limits
     max_portfolio_heat: float
@@ -46,6 +47,7 @@ class UpdateRiskSettingsRequest(BaseModel):
     position_sizing_method: str | None = None
     max_position_size_usd: float | None = Field(None, gt=0)
     max_position_size_percent: float | None = Field(None, gt=0, le=100)
+    risk_percent_per_trade: float | None = Field(None, gt=0, le=100)
 
     # Portfolio Limits
     max_portfolio_heat: float | None = Field(None, gt=0, le=100)

@@ -73,6 +73,7 @@ class BinanceTradeExecutor:
                 stop_loss_price=float(signal.stop_loss_price),
                 take_profit_price=float(signal.take_profit_price),
                 position_size_usd=position_size_usd,
+                available_balance=available_balance,
             )
             if not approved:
                 raise RiskLimitError(f"Risk check failed: {reason}")

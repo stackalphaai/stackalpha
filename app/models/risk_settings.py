@@ -39,6 +39,9 @@ class RiskSettings(Base):
     max_position_size_percent: Mapped[float] = mapped_column(
         Numeric(5, 2), nullable=False, default=10.0
     )
+    risk_percent_per_trade: Mapped[float] = mapped_column(
+        Numeric(5, 2), nullable=False, default=2.0
+    )
 
     # Portfolio Limits
     max_portfolio_heat: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False, default=50.0)
