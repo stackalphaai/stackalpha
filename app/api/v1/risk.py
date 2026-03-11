@@ -40,6 +40,7 @@ def _serialize_risk_settings(settings: RiskSettings) -> RiskSettingsResponse:
         ),
         max_position_size_usd=float(settings.max_position_size_usd),
         max_position_size_percent=float(settings.max_position_size_percent),
+        risk_percent_per_trade=float(settings.risk_percent_per_trade),
         max_portfolio_heat=float(settings.max_portfolio_heat),
         max_open_positions=settings.max_open_positions,
         max_leverage=settings.max_leverage,
