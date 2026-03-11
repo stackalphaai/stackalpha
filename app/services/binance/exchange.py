@@ -114,6 +114,7 @@ class BinanceExchangeService:
                 side=side,
                 type="MARKET",
                 quantity=quantity,
+                newOrderRespType="RESULT",
             )
             logger.info(
                 f"Market order placed: {side} {quantity} {symbol}, orderId={result.get('orderId')}"

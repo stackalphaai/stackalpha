@@ -531,8 +531,8 @@ class RiskManagementService:
             risk_amount = equity * (limits.risk_percent_per_trade / 100)
             # Account for leverage: leveraged SL distance = stop_distance_pct * leverage
             risk_based_size = risk_amount / (stop_distance_pct * clamped_leverage)
-            # Use risk-based size, but don't exceed the originally proposed size
-            clamped_size = min(risk_based_size, position_size_usd, limits.max_position_size_usd)
+            # Use risk-based size as the position size, capped by max allowed
+            clamped_size = min(risk_based_size, limits.max_position_size_usd)
         else:
             clamped_size = min(position_size_usd, limits.max_position_size_usd)
 
