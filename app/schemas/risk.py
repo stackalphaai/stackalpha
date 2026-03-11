@@ -10,7 +10,7 @@ class RiskSettingsResponse(BaseSchema):
     position_sizing_method: str
     max_position_size_usd: float
     max_position_size_percent: float
-    risk_percent_per_trade: float
+    risk_percent_per_trade: float = 2.0
 
     # Portfolio Limits
     max_portfolio_heat: float
