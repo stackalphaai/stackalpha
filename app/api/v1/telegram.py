@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.database import get_db
 from app.dependencies import CurrentUser
 from app.schemas import SuccessResponse
@@ -16,12 +15,14 @@ router = APIRouter(prefix="/telegram", tags=["Telegram"])
 DB = Annotated[AsyncSession, Depends(get_db)]
 
 
+class TelegramConnectRequest(BaseModel):
+    bot_token: str
+    chat_id: int
+
+
 class TelegramConnectionResponse(BaseModel):
     is_connected: bool
-    telegram_username: str | None = None
-    verification_code: str | None = None
-    deep_link: str | None = None
-    bot_username: str | None = None
+    chat_id: int | None = None
     notifications_enabled: bool = False
     signal_notifications: bool = False
     trade_notifications: bool = False
@@ -47,8 +48,7 @@ async def get_telegram_status(
 
     return TelegramConnectionResponse(
         is_connected=connection.is_verified,
-        telegram_username=connection.telegram_username,
-        verification_code=connection.verification_code if not connection.is_verified else None,
+        chat_id=connection.telegram_chat_id,
         notifications_enabled=connection.notifications_enabled,
         signal_notifications=connection.signal_notifications,
         trade_notifications=connection.trade_notifications,
@@ -58,21 +58,28 @@ async def get_telegram_status(
 
 @router.post("/connect", response_model=TelegramConnectionResponse)
 async def connect_telegram(
+    data: TelegramConnectRequest,
     current_user: CurrentUser,
     db: DB,
 ):
     telegram_service = TelegramService(db)
-    code = await telegram_service.generate_verification_code(current_user)
+
+    try:
+        connection = await telegram_service.connect_user(current_user, data.bot_token, data.chat_id)
+    except ValueError as e:
+        from app.core.exceptions import BadRequestError
+
+        raise BadRequestError(str(e)) from e
+
     await db.commit()
 
-    bot_username = settings.telegram_bot_username
-    deep_link = f"https://t.me/{bot_username}?start={code}"
-
     return TelegramConnectionResponse(
-        is_connected=False,
-        verification_code=code,
-        deep_link=deep_link,
-        bot_username=bot_username,
+        is_connected=True,
+        chat_id=connection.telegram_chat_id,
+        notifications_enabled=connection.notifications_enabled,
+        signal_notifications=connection.signal_notifications,
+        trade_notifications=connection.trade_notifications,
+        system_notifications=connection.system_notifications,
     )
 
 
@@ -100,7 +107,7 @@ async def update_notification_settings(
 
     return TelegramConnectionResponse(
         is_connected=True,
-        telegram_username=connection.telegram_username,
+        chat_id=connection.telegram_chat_id,
         notifications_enabled=connection.notifications_enabled,
         signal_notifications=connection.signal_notifications,
         trade_notifications=connection.trade_notifications,
@@ -141,7 +148,7 @@ async def send_test_notification(
         raise BadRequestError("Telegram not connected")
 
     success = await telegram_service.send_message(
-        connection.telegram_chat_id,
+        connection,
         "🎉 <b>Test Notification</b>\n\nYour StackAlpha notifications are working!",
     )
 

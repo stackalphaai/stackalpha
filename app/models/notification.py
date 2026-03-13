@@ -58,6 +58,8 @@ class TelegramConnection(Base):
     telegram_username: Mapped[str | None] = mapped_column(String(100), nullable=True)
     telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
+    encrypted_bot_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     verification_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     verification_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

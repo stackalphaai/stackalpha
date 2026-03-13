@@ -51,7 +51,7 @@ class TradeExecutor:
         if available_balance <= 0:
             raise InsufficientBalanceError()
 
-        position_pct = position_size_percent or signal.suggested_position_size_percent
+        position_pct = position_size_percent or float(signal.suggested_position_size_percent)
         leverage_val = leverage or signal.suggested_leverage
         leverage_val = max(1, min(leverage_val, settings.max_leverage))
 
@@ -106,6 +106,7 @@ class TradeExecutor:
             trade.error_message = str(e)
             logger.error(f"Failed to execute trade: {e}")
 
+        await self.db.flush()
         await self.db.refresh(trade)
         return trade
 

@@ -10,7 +10,6 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.admin import setup_admin
 from app.api.v1.router import router as api_router
 from app.api.webhooks.nowpayments import router as nowpayments_router
-from app.api.webhooks.telegram import router as telegram_router
 from app.config import settings
 from app.core.exceptions import HyperTradeException
 from app.core.middleware import setup_middlewares
@@ -177,7 +176,6 @@ async def root():
 
 app.include_router(api_router, prefix="/api")
 app.include_router(nowpayments_router, prefix="/api/v1")
-app.include_router(telegram_router, prefix="/api/v1")
 
 
 if __name__ == "__main__":

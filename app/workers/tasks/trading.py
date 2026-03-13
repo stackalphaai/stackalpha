@@ -146,9 +146,13 @@ async def _close_trade(trade_id: str, reason: str):
 
         if trade.user.telegram_connection and trade.user.telegram_connection.is_verified:
             telegram_service = TelegramService(db)
-            await telegram_service.send_trade_closed_notification(
-                trade.user.telegram_connection, trade
-            )
+            conn = trade.user.telegram_connection
+            if close_reason == TradeCloseReason.TP_HIT:
+                await telegram_service.send_tp_hit_notification(conn, trade)
+            elif close_reason == TradeCloseReason.SL_HIT:
+                await telegram_service.send_sl_hit_notification(conn, trade)
+            else:
+                await telegram_service.send_trade_closed_notification(conn, trade)
 
         logger.info(f"Trade {trade_id} closed with reason: {reason}")
 
@@ -202,6 +206,117 @@ async def _monitor_tp_sl(trade_id: str):
         if should_close and close_reason:
             close_trade_task.delay(trade_id, close_reason.value)
             logger.info(f"Trade {trade_id} triggered {close_reason.value} at {current_price}")
+
+
+# ---------------------------------------------------------------------------
+# Hyperliquid auto-execution
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(bind=True)
+def auto_execute_hyperliquid_signal(self, signal_id: str):
+    """Auto-execute a Hyperliquid signal for all subscribed users with active wallets."""
+    try:
+        asyncio.run(_auto_execute_hyperliquid_signal(signal_id))
+    except Exception as e:
+        logger.error(f"Hyperliquid auto-execute failed for signal {signal_id}: {e}")
+        raise
+
+
+async def _auto_execute_hyperliquid_signal(signal_id: str):
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from app.core.exceptions import RiskLimitError
+    from app.models import Signal, User
+    from app.models.wallet import Wallet, WalletStatus
+    from app.services.telegram_service import TelegramService
+    from app.services.trading import TradeExecutor
+    from app.workers.database import get_worker_db
+
+    async with get_worker_db() as db:
+        result = await db.execute(select(Signal).where(Signal.id == signal_id))
+        signal = result.scalar_one_or_none()
+
+        if not signal:
+            logger.error(f"Signal {signal_id} not found for auto-execution")
+            return
+
+        # Get all subscribed users with active Hyperliquid wallets that can trade
+        result = await db.execute(
+            select(User)
+            .join(Wallet, Wallet.user_id == User.id)
+            .options(
+                selectinload(User.wallets),
+                selectinload(User.telegram_connection),
+            )
+            .where(
+                Wallet.status == WalletStatus.ACTIVE,
+                Wallet.is_authorized.is_(True),
+                Wallet.is_trading_enabled.is_(True),
+                User.is_subscribed.is_(True),
+            )
+            .distinct()
+        )
+        users = list(result.scalars().all())
+
+        if not users:
+            logger.info("No subscribed users with active Hyperliquid trading wallets")
+            return
+
+        logger.info(f"Auto-executing Hyperliquid signal {signal_id} for {len(users)} users")
+
+        executor = TradeExecutor(db)
+        telegram_service = TelegramService(db)
+
+        for user in users:
+            # Find the first wallet that can trade
+            wallet = next(
+                (w for w in user.wallets if w.can_trade),
+                None,
+            )
+            if not wallet:
+                logger.warning(
+                    f"User {user.id} matched query but has no tradeable wallet — skipping"
+                )
+                continue
+
+            try:
+                trade = await executor.execute_signal(
+                    user=user,
+                    wallet=wallet,
+                    signal=signal,
+                )
+
+                if (
+                    user.telegram_connection
+                    and user.telegram_connection.is_verified
+                    and user.telegram_connection.trade_notifications
+                ):
+                    try:
+                        await telegram_service.send_trade_opened_notification(
+                            user.telegram_connection, trade
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to send trade notification for user {user.id}: {e}")
+
+                logger.info(f"Hyperliquid trade executed for user {user.id}: {trade.id}")
+
+            except RiskLimitError as e:
+                logger.info(
+                    f"Hyperliquid signal {signal_id} rejected by risk management "
+                    f"for user {user.id}: {e.detail}"
+                )
+                continue
+
+            except Exception as e:
+                logger.error(
+                    f"Failed to auto-execute Hyperliquid signal for user {user.id}: {e}",
+                    exc_info=True,
+                )
+                continue
+
+        await db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -275,6 +390,9 @@ async def _auto_execute_binance_signal(signal_id: str):
                 None,
             )
             if not connection:
+                logger.warning(
+                    f"User {user.id} matched query but has no tradeable Binance connection — skipping"
+                )
                 continue
 
             try:
@@ -332,7 +450,7 @@ async def _monitor_binance_tpsl():
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
-    from app.models import Trade, TradeCloseReason, TradeStatus
+    from app.models import Trade, TradeCloseReason, TradeStatus, User
     from app.services.binance import create_binance_exchange_service, get_binance_info_service
     from app.services.binance.utils import to_binance_symbol
     from app.services.telegram_service import TelegramService
@@ -343,7 +461,7 @@ async def _monitor_binance_tpsl():
         result = await db.execute(
             select(Trade)
             .options(
-                selectinload(Trade.user),
+                selectinload(Trade.user).selectinload(User.telegram_connection),
                 selectinload(Trade.exchange_connection),
             )
             .where(
@@ -468,14 +586,17 @@ async def _monitor_binance_tpsl():
                     # Send Telegram notification
                     if (
                         trade.user
-                        and hasattr(trade.user, "telegram_connection")
                         and trade.user.telegram_connection
                         and trade.user.telegram_connection.is_verified
                     ):
                         try:
-                            await telegram_service.send_trade_closed_notification(
-                                trade.user.telegram_connection, trade
-                            )
+                            conn = trade.user.telegram_connection
+                            if close_reason == TradeCloseReason.TP_HIT:
+                                await telegram_service.send_tp_hit_notification(conn, trade)
+                            elif close_reason == TradeCloseReason.SL_HIT:
+                                await telegram_service.send_sl_hit_notification(conn, trade)
+                            else:
+                                await telegram_service.send_trade_closed_notification(conn, trade)
                         except Exception as e:
                             logger.error(f"Failed to send close notification: {e}")
 

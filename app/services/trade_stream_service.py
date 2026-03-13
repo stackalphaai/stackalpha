@@ -64,6 +64,10 @@ class TradeStreamService:
             f"Total users: {len(self._user_clients)}"
         )
 
+        # Ensure Binance symbols are tracked before sending the first payload
+        # so that prices are available (or at least queued for the next fetch).
+        await self._update_binance_tracked_symbols()
+
         # Send initial data immediately
         try:
             payload = await self._build_user_payload(user_id)
@@ -174,13 +178,15 @@ class TradeStreamService:
                 exchange = trade.exchange or "hyperliquid"
                 symbol = trade.symbol
 
-                # Get current price from the appropriate source
-                if exchange == "binance":
-                    current_price = binance_prices.get(symbol, 0)
-                else:
-                    current_price = hl_prices.get(symbol, 0)
-
                 entry_price = float(trade.entry_price) if trade.entry_price else 0
+
+                # Get current price from the appropriate source.
+                # Fall back to entry_price when a live price hasn't been fetched yet
+                # so PnL shows as ~0 rather than the UI displaying a missing price.
+                if exchange == "binance":
+                    current_price = binance_prices.get(symbol, 0) or entry_price
+                else:
+                    current_price = hl_prices.get(symbol, 0) or entry_price
                 position_size = float(trade.position_size) if trade.position_size else 0
                 leverage = trade.leverage or 1
                 tp_price = float(trade.take_profit_price) if trade.take_profit_price else None

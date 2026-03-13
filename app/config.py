@@ -64,9 +64,9 @@ class Settings(BaseSettings):
     nowpayments_success_url: str = ""
     nowpayments_cancel_url: str = ""
 
-    # Telegram
+    # Telegram (deprecated — users now provide their own bot tokens)
     telegram_bot_token: str = ""
-    telegram_bot_username: str = "stackalpha_bot"
+    telegram_bot_username: str = ""
     telegram_webhook_url: str = ""
 
     # Email (Zoho ZeptoMail API)

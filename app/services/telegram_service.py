@@ -1,6 +1,4 @@
 import logging
-import secrets
-from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +6,7 @@ from telegram import Bot
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 
-from app.config import settings
+from app.core.security import decrypt_data, encrypt_data
 from app.models import Signal, TelegramConnection, Trade, User
 
 logger = logging.getLogger(__name__)
@@ -17,83 +15,89 @@ logger = logging.getLogger(__name__)
 class TelegramService:
     def __init__(self, db: AsyncSession | None = None):
         self.db = db
-        self.bot = Bot(token=settings.telegram_bot_token)
 
-    async def generate_verification_code(self, user: User) -> str:
+    def _get_bot(self, connection: TelegramConnection) -> Bot:
+        """Create a Bot instance from the connection's encrypted bot token."""
+        if not connection.encrypted_bot_token:
+            raise ValueError("No bot token configured for this connection")
+        token = decrypt_data(connection.encrypted_bot_token)
+        return Bot(token=token)
+
+    async def connect_user(
+        self,
+        user: User,
+        bot_token: str,
+        chat_id: int,
+    ) -> TelegramConnection:
+        """
+        Connect a user's Telegram by validating their bot_token + chat_id
+        and storing the encrypted credentials.
+        """
         if not self.db:
             raise ValueError("Database session required")
 
-        code = secrets.token_hex(4).upper()
+        # Validate by sending a test message
+        try:
+            bot = Bot(token=bot_token)
+            await bot.send_message(
+                chat_id=chat_id,
+                text=(
+                    "✅ <b>Connected to StackAlpha!</b>\n\n"
+                    "You will now receive:\n"
+                    "• Trading signal alerts\n"
+                    "• Trade execution notifications\n"
+                    "• TP/SL hit notifications\n"
+                    "• Subscription updates"
+                ),
+                parse_mode=ParseMode.HTML,
+            )
+        except TelegramError as e:
+            raise ValueError(
+                f"Failed to send message. Please check your bot token and chat ID. Error: {e}"
+            ) from e
 
+        encrypted_token = encrypt_data(bot_token)
+
+        # Create or update connection
         result = await self.db.execute(
             select(TelegramConnection).where(TelegramConnection.user_id == user.id)
         )
         connection = result.scalar_one_or_none()
 
         if connection:
-            connection.verification_code = code
-            connection.verification_expires_at = datetime.now(UTC) + timedelta(minutes=15)
+            connection.encrypted_bot_token = encrypted_token
+            connection.telegram_chat_id = chat_id
+            connection.is_verified = True
+            connection.is_active = True
         else:
             connection = TelegramConnection(
                 user_id=user.id,
-                verification_code=code,
-                verification_expires_at=datetime.now(UTC) + timedelta(minutes=15),
-                is_verified=False,
+                encrypted_bot_token=encrypted_token,
+                telegram_chat_id=chat_id,
+                is_verified=True,
+                is_active=True,
             )
             self.db.add(connection)
 
         await self.db.flush()
-        return code
-
-    async def verify_user(
-        self,
-        verification_code: str,
-        telegram_user_id: int,
-        telegram_username: str | None,
-        chat_id: int,
-    ) -> TelegramConnection | None:
-        if not self.db:
-            raise ValueError("Database session required")
-
-        result = await self.db.execute(
-            select(TelegramConnection).where(
-                TelegramConnection.verification_code == verification_code.upper()
-            )
-        )
-        connection = result.scalar_one_or_none()
-
-        if not connection:
-            return None
-
-        if connection.verification_expires_at and connection.verification_expires_at < datetime.now(
-            UTC
-        ):
-            return None
-
-        connection.telegram_user_id = telegram_user_id
-        connection.telegram_username = telegram_username
-        connection.telegram_chat_id = chat_id
-        connection.is_verified = True
-        connection.is_active = True
-        connection.verification_code = None
-        connection.verification_expires_at = None
-
         return connection
 
     async def send_message(
         self,
-        chat_id: int,
+        connection: TelegramConnection,
         text: str,
         parse_mode: str = ParseMode.HTML,
     ) -> bool:
+        """Send a message using the connection's own bot token."""
         try:
-            await self.bot.send_message(
-                chat_id=chat_id,
+            bot = self._get_bot(connection)
+            await bot.send_message(
+                chat_id=connection.telegram_chat_id,
                 text=text,
                 parse_mode=parse_mode,
             )
             return True
-        except TelegramError as e:
+        except (TelegramError, ValueError) as e:
             logger.error(f"Failed to send Telegram message: {e}")
             return False
 
@@ -128,7 +132,7 @@ class TelegramService:
 <i>Consensus: {signal.consensus_votes}/{signal.total_votes} models agree</i>
 """
 
-        return await self.send_message(connection.telegram_chat_id, message)
+        return await self.send_message(connection, message)
 
     async def send_trade_opened_notification(
         self,
@@ -158,7 +162,7 @@ class TelegramService:
 <b>Stop Loss:</b> ${trade.stop_loss_price:,.4f}
 """
 
-        return await self.send_message(connection.telegram_chat_id, message)
+        return await self.send_message(connection, message)
 
     async def send_trade_closed_notification(
         self,
@@ -195,7 +199,75 @@ class TelegramService:
 <b>Close Reason:</b> {reason}
 """
 
-        return await self.send_message(connection.telegram_chat_id, message)
+        return await self.send_message(connection, message)
+
+    async def send_tp_hit_notification(
+        self,
+        connection: TelegramConnection,
+        trade: Trade,
+    ) -> bool:
+        """Send a notification when take profit is hit."""
+        if not connection.is_verified or not connection.telegram_chat_id:
+            return False
+
+        if not connection.trade_notifications:
+            return False
+
+        direction = trade.direction.value.upper()
+        pnl = trade.realized_pnl or 0
+        pnl_pct = trade.realized_pnl_percent or 0
+
+        message = f"""
+🎯 <b>Take Profit Hit!</b>
+
+<b>Symbol:</b> {trade.symbol}
+<b>Direction:</b> {direction}
+<b>Leverage:</b> {trade.leverage}x
+
+<b>Entry:</b> ${trade.entry_price:,.4f}
+<b>TP Price:</b> ${trade.take_profit_price:,.4f}
+<b>Exit:</b> ${trade.exit_price:,.4f}
+
+<b>P&L:</b> +${abs(pnl):,.2f} ({pnl_pct:+.2f}%)
+
+Great trade! 🚀
+"""
+
+        return await self.send_message(connection, message)
+
+    async def send_sl_hit_notification(
+        self,
+        connection: TelegramConnection,
+        trade: Trade,
+    ) -> bool:
+        """Send a notification when stop loss is hit."""
+        if not connection.is_verified or not connection.telegram_chat_id:
+            return False
+
+        if not connection.trade_notifications:
+            return False
+
+        direction = trade.direction.value.upper()
+        pnl = trade.realized_pnl or 0
+        pnl_pct = trade.realized_pnl_percent or 0
+
+        message = f"""
+🛑 <b>Stop Loss Hit</b>
+
+<b>Symbol:</b> {trade.symbol}
+<b>Direction:</b> {direction}
+<b>Leverage:</b> {trade.leverage}x
+
+<b>Entry:</b> ${trade.entry_price:,.4f}
+<b>SL Price:</b> ${trade.stop_loss_price:,.4f}
+<b>Exit:</b> ${trade.exit_price:,.4f}
+
+<b>P&L:</b> -${abs(pnl):,.2f} ({pnl_pct:+.2f}%)
+
+Risk was managed. On to the next one. 💪
+"""
+
+        return await self.send_message(connection, message)
 
     async def send_subscription_notification(
         self,
@@ -240,7 +312,7 @@ Renew to continue using premium features.
         else:
             return False
 
-        return await self.send_message(connection.telegram_chat_id, message)
+        return await self.send_message(connection, message)
 
     async def broadcast_message(
         self,
@@ -250,7 +322,10 @@ Renew to continue using premium features.
         if not self.db:
             raise ValueError("Database session required")
 
-        query = select(TelegramConnection).where(TelegramConnection.is_verified)
+        query = select(TelegramConnection).where(
+            TelegramConnection.is_verified,
+            TelegramConnection.encrypted_bot_token.isnot(None),
+        )
 
         if active_only:
             query = query.where(TelegramConnection.is_active)
@@ -261,7 +336,7 @@ Renew to continue using premium features.
         sent_count = 0
         for conn in connections:
             if conn.telegram_chat_id:
-                if await self.send_message(conn.telegram_chat_id, text):
+                if await self.send_message(conn, text):
                     sent_count += 1
 
         return sent_count
@@ -294,8 +369,7 @@ Renew to continue using premium features.
     async def disconnect(self, connection: TelegramConnection) -> TelegramConnection:
         connection.is_active = False
         connection.telegram_chat_id = None
-        connection.telegram_user_id = None
-        connection.telegram_username = None
+        connection.encrypted_bot_token = None
         connection.is_verified = False
 
         return connection

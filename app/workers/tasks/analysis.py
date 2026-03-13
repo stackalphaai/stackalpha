@@ -38,6 +38,7 @@ async def _analyze_all_markets():
     from app.services.telegram_service import TelegramService
     from app.services.trading import SignalService
     from app.workers.database import get_worker_db
+    from app.workers.tasks.trading import auto_execute_hyperliquid_signal
 
     logger.info("Starting market analysis (top gainers)...")
 
@@ -102,6 +103,9 @@ async def _analyze_all_markets():
                         f"{signal.direction.value} @ {signal.entry_price} "
                         f"(confidence={float(signal.confidence_score):.2f})"
                     )
+
+                    # Trigger auto-execution for subscribed users
+                    auto_execute_hyperliquid_signal.delay(str(signal.id))
                 else:
                     logger.info(f"No consensus reached for {symbol}")
 
