@@ -152,9 +152,13 @@ class Settings(BaseSettings):
     @classmethod
     def parse_list(cls, v):
         if isinstance(v, str):
-            import json
+            v = v.strip()
+            if v.startswith("["):
+                import json
 
-            return json.loads(v)
+                return json.loads(v)
+            # Support comma-separated: "https://a.com,https://b.com"
+            return [item.strip() for item in v.split(",") if item.strip()]
         return v
 
 
