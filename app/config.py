@@ -64,9 +64,9 @@ class Settings(BaseSettings):
     llm_consensus_threshold: float = 0.66
     llm_min_confidence: float = 0.6
     llm_min_agreeing_models: int = 2
-    llm_min_risk_reward_ratio: float = 1.5
-    llm_min_adx: float = 20.0
-    llm_min_atr_ratio: float = 0.005
+    llm_min_risk_reward_ratio: float = 1.2
+    llm_min_adx: float = 15.0
+    llm_min_atr_ratio: float = 0.003
     llm_tp_min_pct: float = 0.008
     llm_tp_max_pct: float = 0.03
     llm_sl_min_pct: float = 0.004
@@ -100,8 +100,8 @@ class Settings(BaseSettings):
     # Binance
     binance_default_leverage: int = 5
     binance_max_leverage: int = 20
-    binance_min_volume_usd: float = 100_000_000
-    binance_top_movers_limit: int = 10
+    binance_min_volume_usd: float = 50_000_000
+    binance_top_movers_limit: int = 15
 
     # Trading
     max_position_size_percent: float = 10.0
