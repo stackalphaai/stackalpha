@@ -17,7 +17,6 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.exchange_connection import ExchangeConnection, ExchangeConnectionStatus
 from app.models.signal import Signal, SignalDirection, SignalOutcome, SignalStatus
 from app.models.trade import Trade, TradeStatus
 from app.models.user import User
@@ -414,7 +413,7 @@ async def test_hyperliquid_auto_execute_creates_trades_for_all_subscribed_users(
 
     # Create 2 subscribed users with active wallets
     for i, email in enumerate(["hluser1@autoexec.com", "hluser2@autoexec.com"]):
-        token = await register_and_login(client, email, "Password123!")
+        await register_and_login(client, email, "Password123!")
         user = await make_user_subscribed(db_session, email)
 
         wallet = Wallet(
@@ -467,7 +466,7 @@ async def test_hyperliquid_auto_execute_skips_unsubscribed_users(
     from app.models.wallet import Wallet, WalletStatus, WalletType
 
     # Subscribed user
-    token1 = await register_and_login(client, "hlsub@autoexec.com", "Password123!")
+    await register_and_login(client, "hlsub@autoexec.com", "Password123!")
     user1 = await make_user_subscribed(db_session, "hlsub@autoexec.com")
     wallet1 = Wallet(
         user_id=user1.id,
@@ -481,7 +480,7 @@ async def test_hyperliquid_auto_execute_skips_unsubscribed_users(
     db_session.add(wallet1)
 
     # Unsubscribed user
-    token2 = await register_and_login(client, "hlnosub@autoexec.com", "Password123!")
+    await register_and_login(client, "hlnosub@autoexec.com", "Password123!")
     result = await db_session.execute(select(User).where(User.email == "hlnosub@autoexec.com"))
     user2 = result.scalar_one()
     wallet2 = Wallet(
@@ -521,7 +520,7 @@ async def test_hyperliquid_auto_execute_skips_wallet_not_tradeable(
     """
     from app.models.wallet import Wallet, WalletStatus, WalletType
 
-    token = await register_and_login(client, "hlnotrade@autoexec.com", "Password123!")
+    await register_and_login(client, "hlnotrade@autoexec.com", "Password123!")
     user = await make_user_subscribed(db_session, "hlnotrade@autoexec.com")
 
     wallet = Wallet(
