@@ -55,6 +55,15 @@ class Settings(BaseSettings):
         "x-ai/grok-4.20-beta",
     ]
     llm_consensus_threshold: float = 0.66
+    llm_min_confidence: float = 0.6
+    llm_min_agreeing_models: int = 2
+    llm_min_risk_reward_ratio: float = 1.5
+    llm_min_adx: float = 20.0
+    llm_min_atr_ratio: float = 0.005
+    llm_tp_min_pct: float = 0.008
+    llm_tp_max_pct: float = 0.03
+    llm_sl_min_pct: float = 0.004
+    llm_sl_max_pct: float = 0.02
 
     # NOWPayments
     nowpayments_api_key: str = ""

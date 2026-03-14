@@ -111,14 +111,18 @@ class MarketAnalyzer:
 
         return indicators
 
-    async def analyze_market(
-        self,
-        symbol: str,
-        model: str,
-        indicators: dict[str, Any],
-        market_data: dict[str, Any],
-    ) -> dict[str, Any]:
-        system_prompt = """You are an expert cryptocurrency market analyst specializing in LEVERAGED perpetual futures trading on Hyperliquid.
+    def _build_system_prompt(self, exchange_name: str = "Hyperliquid") -> str:
+        from app.config import settings
+
+        tp_min = settings.llm_tp_min_pct * 100
+        tp_max = settings.llm_tp_max_pct * 100
+        sl_min = settings.llm_sl_min_pct * 100
+        sl_max = settings.llm_sl_max_pct * 100
+        min_conf = settings.llm_min_confidence
+        min_rr = settings.llm_min_risk_reward_ratio
+        min_adx = settings.llm_min_adx
+
+        return f"""You are an expert cryptocurrency market analyst specializing in LEVERAGED perpetual futures trading on {exchange_name}.
 Analyze the provided technical indicators and market data, then provide a trading recommendation.
 
 CRITICAL — LEVERAGE-AWARE TP/SL RULES:
@@ -128,13 +132,13 @@ These trades use leverage (typically 3x-20x). With leverage, small price moves c
 - At 15x leverage: a 0.7% price move = ~10% P&L
 
 Therefore, your TP and SL MUST be tight and realistic:
-- Take Profit: Set 1-3% from entry price (NOT 5-10%). These are short-term leveraged trades.
-- Stop Loss: Set 0.5-2% from entry price. Keep it tight to protect capital with leverage.
+- Take Profit: Set {tp_min}-{tp_max}% from entry price (NOT 5-10%). These are short-term leveraged trades.
+- Stop Loss: Set {sl_min}-{sl_max}% from entry price. Keep it tight to protect capital with leverage.
 - A move from $0.0899 to $0.0911 on DOGE (1.3%) at 10x = 13% profit. That IS the trade.
 - Do NOT set TP at 5%+ away — that would require a massive move and the trade will likely get stopped out first.
 
 Your response MUST be valid JSON with the following structure:
-{
+{{
     "direction": "long" | "short" | "neutral",
     "confidence": 0.0-1.0,
     "entry_price": float,
@@ -144,10 +148,10 @@ Your response MUST be valid JSON with the following structure:
     "reasoning": "detailed analysis explanation",
     "key_factors": ["factor1", "factor2", "factor3"],
     "risk_level": "low" | "medium" | "high"
-}
+}}
 
 STRICT FILTERING — return "neutral" if ANY of these apply:
-- ADX < 20 (no clear trend — avoid choppy/ranging markets)
+- ADX < {min_adx} (no clear trend — avoid choppy/ranging markets)
 - RSI between 40-60 with no clear divergence (indecisive momentum)
 - MACD histogram near zero with no clear crossover forming
 - Price is mid-range within Bollinger Bands with no directional pressure
@@ -156,15 +160,24 @@ STRICT FILTERING — return "neutral" if ANY of these apply:
 - Funding rate is extreme and against your direction (>0.03% for longs, <-0.03% for shorts)
 
 Guidelines for valid signals:
-- Only recommend trades with confidence > 0.7 (be conservative)
-- Risk-reward ratio MUST be at least 1.5:1 — if you can't find a setup with this ratio, return neutral
-- TP should be 1-3% from entry, SL should be 0.5-2% from entry (leverage amplifies these moves)
+- Only recommend trades with confidence > {min_conf} (be conservative)
+- Risk-reward ratio MUST be at least {min_rr}:1 — if you can't find a setup with this ratio, return neutral
+- TP should be {tp_min}-{tp_max}% from entry, SL should be {sl_min}-{sl_max}% from entry (leverage amplifies these moves)
 - Use ATR to gauge recent volatility — if ATR/price < 1%, use tighter TP/SL
 - Factor in funding rate for position costs
 - Use support/resistance from Bollinger Bands for precise TP/SL placement
 - Prefer trades where EMA_9 > EMA_21 (for longs) or EMA_9 < EMA_21 (for shorts)
 - Higher leverage = tighter TP/SL required
 - When in doubt, return "neutral" — it is better to miss a trade than to enter a bad one"""
+
+    async def analyze_market(
+        self,
+        symbol: str,
+        model: str,
+        indicators: dict[str, Any],
+        market_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        system_prompt = self._build_system_prompt("Hyperliquid")
 
         user_prompt = f"""Analyze {symbol} for a potential trade opportunity.
 

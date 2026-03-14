@@ -75,11 +75,11 @@ class ConsensusEngine:
                 )
                 return None
 
-            # Require at least 2 models to agree — a single model vote is not enough
-            if len(valid_analyses) < 2:
+            min_models = settings.llm_min_agreeing_models
+            if len(valid_analyses) < min_models:
                 logger.info(
                     f"Insufficient model agreement for {symbol}: "
-                    f"only {len(valid_analyses)} valid vote(s), need at least 2"
+                    f"only {len(valid_analyses)} valid vote(s), need at least {min_models}"
                 )
                 return None
 
@@ -107,16 +107,19 @@ class ConsensusEngine:
             logger.info(f"Skipping {symbol}: zero ATR or price")
             return False
 
-        # ADX below 20 = no clear trend — avoid choppy markets
-        if adx < 20:
-            logger.info(f"Skipping {symbol}: weak trend ADX={adx:.1f} (need >= 20)")
+        # ADX below threshold = no clear trend — avoid choppy markets
+        min_adx = settings.llm_min_adx
+        if adx < min_adx:
+            logger.info(f"Skipping {symbol}: weak trend ADX={adx:.1f} (need >= {min_adx})")
             return False
 
         # ATR/price ratio too low = no meaningful volatility for leveraged trading
+        min_atr_ratio = settings.llm_min_atr_ratio
         atr_ratio = atr / current_price
-        if atr_ratio < 0.005:
+        if atr_ratio < min_atr_ratio:
             logger.info(
-                f"Skipping {symbol}: volatility too low ATR/price={atr_ratio:.4f} (need >= 0.5%)"
+                f"Skipping {symbol}: volatility too low "
+                f"ATR/price={atr_ratio:.4f} (need >= {min_atr_ratio})"
             )
             return False
 
@@ -160,8 +163,11 @@ class ConsensusEngine:
             direction_confidences[winning_direction]
         )
 
-        if avg_confidence < 0.7:
-            logger.info(f"Confidence too low for {symbol}: {avg_confidence:.2f} (need >= 0.70)")
+        min_confidence = settings.llm_min_confidence
+        if avg_confidence < min_confidence:
+            logger.info(
+                f"Confidence too low for {symbol}: {avg_confidence:.2f} (need >= {min_confidence})"
+            )
             return None
 
         entry_prices = [a.get("entry_price") for a in relevant_analyses if a.get("entry_price")]
@@ -190,12 +196,12 @@ class ConsensusEngine:
 
         leverage = max(1, min(leverage, settings.max_leverage))
 
-        # Clamp TP/SL to leverage-friendly ranges (1-3% TP, 0.5-2% SL)
-        # This prevents LLMs from setting unrealistically wide targets
+        # Clamp TP/SL to configured ranges
         take_profit = self._clamp_tp(entry_price, take_profit, winning_direction)
         stop_loss = self._clamp_sl(entry_price, stop_loss, winning_direction)
 
-        # Validate risk-reward ratio — must be at least 1.5:1
+        # Validate risk-reward ratio
+        min_rr = settings.llm_min_risk_reward_ratio
         if entry_price and entry_price > 0:
             if winning_direction == "long":
                 reward = take_profit - entry_price
@@ -206,9 +212,9 @@ class ConsensusEngine:
 
             if risk > 0:
                 rr_ratio = reward / risk
-                if rr_ratio < 1.5:
+                if rr_ratio < min_rr:
                     logger.info(
-                        f"Risk-reward too low for {symbol}: {rr_ratio:.2f}:1 (need >= 1.5:1)"
+                        f"Risk-reward too low for {symbol}: {rr_ratio:.2f}:1 (need >= {min_rr}:1)"
                     )
                     return None
             else:
@@ -263,11 +269,9 @@ class ConsensusEngine:
         direction: str,
         atr: float,
     ) -> float:
-        # For leveraged futures: TP should be tight (1-3% from entry).
-        # Use ATR as a guide but cap it to a max of 3% of entry price.
         atr_based = atr * 1.5
-        max_tp_distance = entry_price * 0.025  # 2.5% max
-        min_tp_distance = entry_price * 0.01  # 1% min
+        max_tp_distance = entry_price * settings.llm_tp_max_pct
+        min_tp_distance = entry_price * settings.llm_tp_min_pct
         tp_distance = max(min_tp_distance, min(atr_based, max_tp_distance))
 
         if direction == "long":
@@ -281,11 +285,9 @@ class ConsensusEngine:
         direction: str,
         atr: float,
     ) -> float:
-        # For leveraged futures: SL should be tight (0.5-2% from entry).
-        # Use ATR as a guide but cap it to protect capital with leverage.
         atr_based = atr * 1.0
-        max_sl_distance = entry_price * 0.015  # 1.5% max
-        min_sl_distance = entry_price * 0.005  # 0.5% min
+        max_sl_distance = entry_price * settings.llm_sl_max_pct
+        min_sl_distance = entry_price * settings.llm_sl_min_pct
         sl_distance = max(min_sl_distance, min(atr_based, max_sl_distance))
 
         if direction == "long":
@@ -299,9 +301,9 @@ class ConsensusEngine:
         tp_price: float,
         direction: str,
     ) -> float:
-        """Clamp TP to a max of 3% from entry (leverage-friendly)."""
-        max_tp_pct = 0.03  # 3%
-        min_tp_pct = 0.008  # 0.8%
+        """Clamp TP within configured percentage range from entry."""
+        max_tp_pct = settings.llm_tp_max_pct
+        min_tp_pct = settings.llm_tp_min_pct
 
         if direction == "long":
             tp_pct = (tp_price - entry_price) / entry_price if entry_price else 0
@@ -323,9 +325,9 @@ class ConsensusEngine:
         sl_price: float,
         direction: str,
     ) -> float:
-        """Clamp SL to a max of 2% from entry (leverage-friendly)."""
-        max_sl_pct = 0.02  # 2%
-        min_sl_pct = 0.004  # 0.4%
+        """Clamp SL within configured percentage range from entry."""
+        max_sl_pct = settings.llm_sl_max_pct
+        min_sl_pct = settings.llm_sl_min_pct
 
         if direction == "long":
             sl_pct = (entry_price - sl_price) / entry_price if entry_price else 0
