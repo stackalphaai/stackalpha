@@ -19,7 +19,14 @@ class Settings(BaseSettings):
     secret_key: str
     api_version: str = "v1"
     allowed_hosts: list[str] = ["localhost", "127.0.0.1"]
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "https://stackalpha.xyz",
+        "https://www.stackalpha.xyz",
+        "https://admin.stackalpha.xyz",
+    ]
 
     # Database
     database_url: str
