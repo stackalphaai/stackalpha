@@ -66,7 +66,10 @@ class OpenRouterClient:
             return response.json()
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"OpenRouter API error: {e.response.status_code} - {e.response.text}")
+            logger.error(
+                f"OpenRouter API error for model '{model}': "
+                f"{e.response.status_code} - {e.response.text[:500]}"
+            )
             raise LLMServiceError(f"LLM API request failed: {e.response.status_code}") from e
         except httpx.RequestError as e:
             logger.error(f"OpenRouter request error: {str(e)}")
@@ -84,7 +87,17 @@ class OpenRouterClient:
         response = await self.chat_completion(model, messages, **kwargs)
 
         try:
-            return response["choices"][0]["message"]["content"]
+            content = response["choices"][0]["message"]["content"]
+            if content is None:
+                # Some models (e.g. reasoning models) return content=null
+                # Try to use the reasoning field as fallback
+                reasoning = response["choices"][0]["message"].get("reasoning")
+                if reasoning:
+                    logger.warning(f"Model '{model}' returned null content, using reasoning field")
+                    return reasoning
+                logger.error(f"Model '{model}' returned null content with no reasoning fallback")
+                raise LLMServiceError(f"Model '{model}' returned empty response")
+            return content
         except (KeyError, IndexError) as e:
             logger.error(f"Failed to extract completion text: {e}")
             raise LLMServiceError("Invalid response format from LLM") from e

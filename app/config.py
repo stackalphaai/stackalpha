@@ -51,8 +51,8 @@ class Settings(BaseSettings):
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     llm_models: list[str] = [
         "google/gemini-3-flash-preview",
-        "deepseek/deepseek-v3.2",
-        "openai/gpt-5.1-chat",
+        "deepseek/deepseek-chat-v3-0324",
+        "openai/gpt-5.2-chat",
     ]
     llm_consensus_threshold: float = 0.66
 

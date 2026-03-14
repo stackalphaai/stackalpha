@@ -37,17 +37,38 @@ class ConsensusEngine:
             analyses = await asyncio.gather(*tasks, return_exceptions=True)
 
             valid_analyses = []
-            for analysis in analyses:
+            failed_models = []
+            neutral_models = []
+            for i, analysis in enumerate(analyses):
+                model_name = self.models[i] if i < len(self.models) else f"model-{i}"
                 if isinstance(analysis, Exception):
-                    logger.error(f"Analysis failed: {analysis}")
+                    logger.error(f"LLM analysis failed for {symbol} with {model_name}: {analysis}")
+                    failed_models.append(model_name)
                     continue
                 if analysis.get("error"):
+                    logger.warning(
+                        f"LLM returned error for {symbol} with {model_name}: {analysis.get('error')}"
+                    )
+                    failed_models.append(model_name)
                     continue
-                if analysis.get("direction") != "neutral":
-                    valid_analyses.append(analysis)
+                if analysis.get("direction") == "neutral":
+                    neutral_models.append(model_name)
+                    continue
+                valid_analyses.append(analysis)
+
+            if failed_models:
+                logger.warning(
+                    f"Models failed for {symbol}: {', '.join(failed_models)} "
+                    f"({len(failed_models)}/{len(self.models)})"
+                )
+            if neutral_models:
+                logger.info(f"Models returned neutral for {symbol}: {', '.join(neutral_models)}")
 
             if not valid_analyses:
-                logger.info(f"No valid analyses for {symbol}")
+                logger.info(
+                    f"No valid analyses for {symbol} — "
+                    f"{len(failed_models)} failed, {len(neutral_models)} neutral"
+                )
                 return None
 
             signal = self._build_consensus(symbol, valid_analyses, market_data, indicators)
