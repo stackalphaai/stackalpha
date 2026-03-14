@@ -24,6 +24,10 @@ class ConsensusEngine:
                 logger.warning(f"No technical indicators available for {symbol}")
                 return None
 
+            # Pre-filter: skip symbols with degenerate/flat indicators
+            if not self._indicators_are_valid(symbol, indicators):
+                return None
+
             market_data = await self.info_service.get_market_data(symbol)
             if not market_data:
                 logger.warning(f"No market data available for {symbol}")
@@ -71,12 +75,52 @@ class ConsensusEngine:
                 )
                 return None
 
+            # Require at least 2 models to agree — a single model vote is not enough
+            if len(valid_analyses) < 2:
+                logger.info(
+                    f"Insufficient model agreement for {symbol}: "
+                    f"only {len(valid_analyses)} valid vote(s), need at least 2"
+                )
+                return None
+
             signal = self._build_consensus(symbol, valid_analyses, market_data, indicators)
             return signal
 
         except Exception as e:
             logger.error(f"Error generating signal for {symbol}: {e}")
             return None
+
+    def _indicators_are_valid(self, symbol: str, indicators: dict[str, Any]) -> bool:
+        """Reject symbols with degenerate indicators (newly listed, flat price action)."""
+        rsi = indicators.get("rsi_14", 0)
+        atr = indicators.get("atr_14", 0)
+        adx = indicators.get("adx", 0)
+        current_price = indicators.get("current_price", 0)
+
+        # RSI stuck at extremes (0 or 100) means no real price movement
+        if rsi <= 1 or rsi >= 99:
+            logger.info(f"Skipping {symbol}: degenerate RSI={rsi:.1f}")
+            return False
+
+        # ATR of 0 means zero volatility — no trade opportunity
+        if atr <= 0 or current_price <= 0:
+            logger.info(f"Skipping {symbol}: zero ATR or price")
+            return False
+
+        # ADX below 20 = no clear trend — avoid choppy markets
+        if adx < 20:
+            logger.info(f"Skipping {symbol}: weak trend ADX={adx:.1f} (need >= 20)")
+            return False
+
+        # ATR/price ratio too low = no meaningful volatility for leveraged trading
+        atr_ratio = atr / current_price
+        if atr_ratio < 0.005:
+            logger.info(
+                f"Skipping {symbol}: volatility too low ATR/price={atr_ratio:.4f} (need >= 0.5%)"
+            )
+            return False
+
+        return True
 
     def _build_consensus(
         self,
@@ -116,8 +160,8 @@ class ConsensusEngine:
             direction_confidences[winning_direction]
         )
 
-        if avg_confidence < 0.6:
-            logger.info(f"Confidence too low for {symbol}: {avg_confidence:.2f}")
+        if avg_confidence < 0.7:
+            logger.info(f"Confidence too low for {symbol}: {avg_confidence:.2f} (need >= 0.70)")
             return None
 
         entry_prices = [a.get("entry_price") for a in relevant_analyses if a.get("entry_price")]
@@ -150,6 +194,26 @@ class ConsensusEngine:
         # This prevents LLMs from setting unrealistically wide targets
         take_profit = self._clamp_tp(entry_price, take_profit, winning_direction)
         stop_loss = self._clamp_sl(entry_price, stop_loss, winning_direction)
+
+        # Validate risk-reward ratio — must be at least 1.5:1
+        if entry_price and entry_price > 0:
+            if winning_direction == "long":
+                reward = take_profit - entry_price
+                risk = entry_price - stop_loss
+            else:
+                reward = entry_price - take_profit
+                risk = stop_loss - entry_price
+
+            if risk > 0:
+                rr_ratio = reward / risk
+                if rr_ratio < 1.5:
+                    logger.info(
+                        f"Risk-reward too low for {symbol}: {rr_ratio:.2f}:1 (need >= 1.5:1)"
+                    )
+                    return None
+            else:
+                logger.warning(f"Invalid risk calculation for {symbol}: risk={risk}")
+                return None
 
         all_reasoning = [a.get("reasoning", "") for a in relevant_analyses]
         all_factors = []

@@ -146,15 +146,25 @@ Your response MUST be valid JSON with the following structure:
     "risk_level": "low" | "medium" | "high"
 }
 
-Guidelines:
-- Only recommend trades with confidence > 0.6
-- Risk-reward ratio should be at least 1.5:1
+STRICT FILTERING — return "neutral" if ANY of these apply:
+- ADX < 20 (no clear trend — avoid choppy/ranging markets)
+- RSI between 40-60 with no clear divergence (indecisive momentum)
+- MACD histogram near zero with no clear crossover forming
+- Price is mid-range within Bollinger Bands with no directional pressure
+- Volume is declining (current volume < average volume)
+- Multiple indicators conflict (e.g., RSI says oversold but MACD is bearish)
+- Funding rate is extreme and against your direction (>0.03% for longs, <-0.03% for shorts)
+
+Guidelines for valid signals:
+- Only recommend trades with confidence > 0.7 (be conservative)
+- Risk-reward ratio MUST be at least 1.5:1 — if you can't find a setup with this ratio, return neutral
 - TP should be 1-3% from entry, SL should be 0.5-2% from entry (leverage amplifies these moves)
 - Use ATR to gauge recent volatility — if ATR/price < 1%, use tighter TP/SL
 - Factor in funding rate for position costs
 - Use support/resistance from Bollinger Bands for precise TP/SL placement
-- Consider trend strength from ADX
-- Higher leverage = tighter TP/SL required"""
+- Prefer trades where EMA_9 > EMA_21 (for longs) or EMA_9 < EMA_21 (for shorts)
+- Higher leverage = tighter TP/SL required
+- When in doubt, return "neutral" — it is better to miss a trade than to enter a bad one"""
 
         user_prompt = f"""Analyze {symbol} for a potential trade opportunity.
 
