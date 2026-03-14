@@ -111,6 +111,7 @@ async def _analyze_all_markets():
 
             except Exception as e:
                 logger.error(f"Error analyzing {symbol}: {e}", exc_info=True)
+                await db.rollback()
                 analyzed_count += 1
                 continue
 
@@ -309,6 +310,7 @@ async def _analyze_binance_markets():
 
             except Exception as e:
                 logger.error(f"Error analyzing Binance {symbol}: {e}", exc_info=True)
+                await db.rollback()
                 analyzed_count += 1
                 continue
 

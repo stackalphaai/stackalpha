@@ -109,6 +109,13 @@ class BinanceMarketAnalyzer:
         indicators["volume_avg"] = float(df["volume"].mean())
         indicators["volume_current"] = float(df["volume"].iloc[-1])
 
+        # Sanitize NaN/Inf values — PostgreSQL JSONB rejects them
+        import math
+
+        for key, value in indicators.items():
+            if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+                indicators[key] = 0.0
+
         return indicators
 
     async def analyze_market(
