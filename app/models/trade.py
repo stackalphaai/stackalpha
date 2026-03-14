@@ -21,6 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 if TYPE_CHECKING:
+    from app.models.exchange_connection import ExchangeConnection
     from app.models.signal import Signal
     from app.models.user import User
 
@@ -129,6 +130,9 @@ class Trade(Base):
 
     user: Mapped["User"] = relationship("User", back_populates="trades")
     signal: Mapped[Optional["Signal"]] = relationship("Signal", back_populates="trades")
+    exchange_connection: Mapped[Optional["ExchangeConnection"]] = relationship(
+        "ExchangeConnection", foreign_keys=[exchange_connection_id]
+    )
 
     def __repr__(self) -> str:
         return f"<Trade(id={self.id}, symbol={self.symbol}, status={self.status})>"
