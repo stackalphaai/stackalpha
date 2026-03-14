@@ -147,6 +147,139 @@ class CeleryTaskInfo(BaseModel):
     description: str
 
 
+class LLMModelInfo(BaseModel):
+    id: str
+    name: str
+    provider: str
+    description: str
+    is_active: bool = False
+
+
+class UpdateModelsRequest(BaseModel):
+    active_models: list[str]
+
+
+# Pre-seeded catalog of available LLM models on OpenRouter
+AVAILABLE_LLM_MODELS: list[dict[str, str]] = [
+    # Anthropic
+    {
+        "id": "anthropic/claude-sonnet-4.6",
+        "name": "Claude Sonnet 4.6",
+        "provider": "Anthropic",
+        "description": "Latest Anthropic model, strong reasoning and analysis",
+    },
+    {
+        "id": "anthropic/claude-opus-4.6",
+        "name": "Claude Opus 4.6",
+        "provider": "Anthropic",
+        "description": "Most capable Anthropic model, deep analysis",
+    },
+    {
+        "id": "anthropic/claude-haiku-4.5",
+        "name": "Claude Haiku 4.5",
+        "provider": "Anthropic",
+        "description": "Fast and cost-efficient Anthropic model",
+    },
+    # OpenAI
+    {
+        "id": "openai/gpt-5.2-chat",
+        "name": "GPT-5.2 Chat",
+        "provider": "OpenAI",
+        "description": "Latest OpenAI flagship model",
+    },
+    {
+        "id": "openai/o3-mini",
+        "name": "O3 Mini",
+        "provider": "OpenAI",
+        "description": "OpenAI reasoning model, compact and fast",
+    },
+    {
+        "id": "openai/gpt-4.1",
+        "name": "GPT-4.1",
+        "provider": "OpenAI",
+        "description": "Strong general-purpose OpenAI model",
+    },
+    {
+        "id": "openai/gpt-4.1-mini",
+        "name": "GPT-4.1 Mini",
+        "provider": "OpenAI",
+        "description": "Cost-efficient OpenAI model",
+    },
+    # xAI
+    {
+        "id": "x-ai/grok-4.20-beta",
+        "name": "Grok 4.20 Beta",
+        "provider": "xAI",
+        "description": "Latest xAI model with real-time data awareness",
+    },
+    {
+        "id": "x-ai/grok-3-mini-beta",
+        "name": "Grok 3 Mini Beta",
+        "provider": "xAI",
+        "description": "Compact xAI reasoning model",
+    },
+    # Google
+    {
+        "id": "google/gemini-2.5-pro-preview",
+        "name": "Gemini 2.5 Pro",
+        "provider": "Google",
+        "description": "Google's most capable model, strong at analysis",
+    },
+    {
+        "id": "google/gemini-2.5-flash-preview",
+        "name": "Gemini 2.5 Flash",
+        "provider": "Google",
+        "description": "Fast and efficient Google model",
+    },
+    # Meta
+    {
+        "id": "meta-llama/llama-4-maverick",
+        "name": "Llama 4 Maverick",
+        "provider": "Meta",
+        "description": "Meta's latest open model, strong reasoning",
+    },
+    {
+        "id": "meta-llama/llama-4-scout",
+        "name": "Llama 4 Scout",
+        "provider": "Meta",
+        "description": "Efficient Meta open model",
+    },
+    # DeepSeek
+    {
+        "id": "deepseek/deepseek-r1",
+        "name": "DeepSeek R1",
+        "provider": "DeepSeek",
+        "description": "Strong reasoning model, competitive performance",
+    },
+    {
+        "id": "deepseek/deepseek-chat-v3-0324",
+        "name": "DeepSeek V3",
+        "provider": "DeepSeek",
+        "description": "General-purpose DeepSeek chat model",
+    },
+    # Mistral
+    {
+        "id": "mistralai/mistral-large-2411",
+        "name": "Mistral Large",
+        "provider": "Mistral",
+        "description": "Mistral's flagship model",
+    },
+    {
+        "id": "mistralai/mistral-small-3.1-24b-instruct",
+        "name": "Mistral Small 3.1",
+        "provider": "Mistral",
+        "description": "Efficient Mistral model, good cost-performance ratio",
+    },
+    # Qwen
+    {
+        "id": "qwen/qwen-2.5-72b-instruct",
+        "name": "Qwen 2.5 72B",
+        "provider": "Qwen",
+        "description": "Alibaba's large instruction-tuned model",
+    },
+]
+
+
 # ============================================================================
 # Dashboard & Health
 # ============================================================================
@@ -560,6 +693,78 @@ async def reset_config(
 
     # Reload from env - we can't easily reset a single value, but we note it
     return {"message": f"Override for '{key}' removed. Restart services to apply default."}
+
+
+# ============================================================================
+# LLM Model Management
+# ============================================================================
+
+
+@router.get("/models", response_model=list[LLMModelInfo])
+async def list_llm_models(current_user: AdminUser) -> list[LLMModelInfo]:
+    """List all available LLM models with their active status."""
+    active_models = settings.llm_models
+    return [
+        LLMModelInfo(
+            id=m["id"],
+            name=m["name"],
+            provider=m["provider"],
+            description=m["description"],
+            is_active=m["id"] in active_models,
+        )
+        for m in AVAILABLE_LLM_MODELS
+    ]
+
+
+@router.put("/models")
+async def update_active_models(
+    body: UpdateModelsRequest,
+    current_user: SuperAdminUser,
+    db: DB,
+) -> dict[str, Any]:
+    """Set which LLM models are used for consensus analysis."""
+    known_ids = {m["id"] for m in AVAILABLE_LLM_MODELS}
+    # Allow custom model IDs not in the catalog (power users)
+    active = body.active_models
+
+    if len(active) < 1:
+        from app.core.exceptions import ValidationError
+
+        raise ValidationError("At least 1 model must be active")
+
+    serialized = json.dumps(active)
+
+    # Upsert system_config
+    existing = await db.execute(select(SystemConfig).where(SystemConfig.key == "llm_models"))
+    config_row = existing.scalar_one_or_none()
+    if config_row:
+        config_row.value = serialized
+    else:
+        config_row = SystemConfig(
+            key="llm_models",
+            value=serialized,
+            description="Active LLM models for consensus analysis",
+            category="signal_quality",
+        )
+        db.add(config_row)
+
+    await db.commit()
+
+    # Apply in-memory immediately
+    settings.llm_models = active
+
+    in_catalog = [m for m in active if m in known_ids]
+    custom = [m for m in active if m not in known_ids]
+    logger.info(
+        f"Admin {current_user.email} updated active models: "
+        f"{len(in_catalog)} catalog + {len(custom)} custom = {len(active)} total"
+    )
+
+    return {
+        "active_models": active,
+        "count": len(active),
+        "message": f"Updated to {len(active)} active model(s)",
+    }
 
 
 # ============================================================================
