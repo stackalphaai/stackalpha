@@ -50,9 +50,9 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     llm_models: list[str] = [
-        "google/gemini-3-flash-preview",
-        "deepseek/deepseek-chat-v3-0324",
+        "anthropic/claude-sonnet-4.6",
         "openai/gpt-5.2-chat",
+        "x-ai/grok-4.20-beta",
     ]
     llm_consensus_threshold: float = 0.66
 
