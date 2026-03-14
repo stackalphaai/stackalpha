@@ -163,9 +163,9 @@ class ConsensusEngine:
             "direction": SignalDirection.LONG
             if winning_direction == "long"
             else SignalDirection.SHORT,
-            "entry_price": round(entry_price, 6),
-            "take_profit_price": round(take_profit, 6),
-            "stop_loss_price": round(stop_loss, 6),
+            "entry_price": entry_price,
+            "take_profit_price": take_profit,
+            "stop_loss_price": stop_loss,
             "suggested_leverage": leverage,
             "suggested_position_size_percent": self._calculate_position_size(
                 avg_confidence, indicators.get("atr_14", 0) / current_price if current_price else 0
