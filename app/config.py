@@ -84,8 +84,8 @@ class Settings(BaseSettings):
     # Binance
     binance_default_leverage: int = 5
     binance_max_leverage: int = 20
-    binance_min_volume_usd: float = 10_000_000
-    binance_top_movers_limit: int = 5
+    binance_min_volume_usd: float = 100_000_000
+    binance_top_movers_limit: int = 10
 
     # Trading
     max_position_size_percent: float = 10.0

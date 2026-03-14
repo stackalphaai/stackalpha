@@ -173,8 +173,8 @@ async def _analyze_single_market(symbol: str):
 # Binance market analysis
 # ---------------------------------------------------------------------------
 
-BINANCE_TOP_MOVERS_LIMIT = 5
-BINANCE_MIN_VOLUME_USD = 10_000_000
+BINANCE_TOP_GAINERS_LIMIT = 10
+BINANCE_MIN_VOLUME_USD = 100_000_000
 
 
 @celery_app.task(bind=True, max_retries=3)
@@ -204,7 +204,6 @@ async def _get_recent_binance_signal_symbols(db) -> set[str]:
 async def _analyze_binance_markets():
     from sqlalchemy import select
 
-    from app.config import settings as app_settings
     from app.models import TelegramConnection
     from app.services.binance import get_binance_info_service
     from app.services.telegram_service import TelegramService
@@ -212,55 +211,30 @@ async def _analyze_binance_markets():
     from app.workers.database import get_worker_db
     from app.workers.tasks.trading import auto_execute_binance_signal
 
-    logger.info("Starting Binance market analysis (top gainers + losers)...")
+    logger.info("Starting Binance Futures market analysis (top gainers)...")
 
     info_service = get_binance_info_service()
-    limit = app_settings.binance_top_movers_limit
-    min_vol = app_settings.binance_min_volume_usd
 
-    # Fetch top gainers and losers
     try:
         top_gainers = await info_service.get_top_gainers(
-            min_volume=min_vol,
-            limit=limit + 3,
+            min_volume=BINANCE_MIN_VOLUME_USD,
+            limit=BINANCE_TOP_GAINERS_LIMIT + 5,  # fetch extra to account for skips
         )
     except Exception as e:
-        logger.error(f"Failed to fetch Binance top gainers: {e}")
-        top_gainers = []
-
-    try:
-        top_losers = await info_service.get_top_losers(
-            min_volume=min_vol,
-            limit=limit + 3,
-        )
-    except Exception as e:
-        logger.error(f"Failed to fetch Binance top losers: {e}")
-        top_losers = []
-
-    if not top_gainers and not top_losers:
-        logger.warning("No Binance movers found above volume threshold")
+        logger.error(f"Failed to fetch Binance Futures top gainers: {e}")
         return
 
-    if top_gainers:
-        summary = ", ".join(
-            f"{c['symbol']} (+{c['price_change_percent_24h']:.1f}%)" for c in top_gainers[:limit]
+    if not top_gainers:
+        logger.warning(
+            f"No Binance Futures gainers found above ${BINANCE_MIN_VOLUME_USD:,.0f} volume"
         )
-        logger.info(f"Binance top gainers: {summary}")
+        return
 
-    if top_losers:
-        summary = ", ".join(
-            f"{c['symbol']} ({c['price_change_percent_24h']:.1f}%)" for c in top_losers[:limit]
-        )
-        logger.info(f"Binance top losers: {summary}")
-
-    # Combine and deduplicate
-    all_movers = []
-    seen_symbols = set()
-    for coin in top_gainers + top_losers:
-        symbol = coin.get("symbol")
-        if symbol and symbol not in seen_symbols:
-            seen_symbols.add(symbol)
-            all_movers.append(coin)
+    summary = ", ".join(
+        f"{c['symbol']} (+{c['price_change_percent_24h']:.1f}%, vol ${c['volume_24h']:,.0f})"
+        for c in top_gainers[:BINANCE_TOP_GAINERS_LIMIT]
+    )
+    logger.info(f"Binance Futures top gainers: {summary}")
 
     signals_generated = []
 
@@ -272,23 +246,24 @@ async def _analyze_binance_markets():
             logger.info(f"Skipping Binance symbols with active signals: {existing_symbols}")
 
         analyzed_count = 0
-        max_analyze = limit * 2  # analyze up to gainers + losers limit
 
-        for coin_data in all_movers:
-            if analyzed_count >= max_analyze:
+        for coin_data in top_gainers:
+            if analyzed_count >= BINANCE_TOP_GAINERS_LIMIT:
                 break
 
             symbol = coin_data.get("symbol")
-            if not symbol or symbol in existing_symbols:
-                if symbol:
-                    logger.info(f"Skipping {symbol} — active Binance signal exists")
+            if not symbol:
+                continue
+
+            if symbol in existing_symbols:
+                logger.info(f"Skipping {symbol} — active Binance signal exists")
                 continue
 
             change_pct = coin_data.get("price_change_percent_24h", 0)
             volume = coin_data.get("volume_24h", 0)
             logger.info(
                 f"Analyzing Binance {symbol} (#{analyzed_count + 1}) — "
-                f"{change_pct:+.1f}%, vol ${volume:,.0f}"
+                f"+{change_pct:.1f}%, vol ${volume:,.0f}"
             )
 
             try:
@@ -339,6 +314,6 @@ async def _analyze_binance_markets():
                 logger.error(f"Telegram notification batch failed: {e}")
 
     logger.info(
-        f"Binance market analysis complete. Analyzed {analyzed_count} movers, "
+        f"Binance Futures analysis complete. Analyzed {analyzed_count} top gainers, "
         f"generated {len(signals_generated)} signals."
     )
