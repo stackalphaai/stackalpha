@@ -93,6 +93,15 @@ class UserActionRequest(BaseModel):
     reason: str | None = None
 
 
+class UserUpdateRequest(BaseModel):
+    full_name: str | None = None
+    is_active: bool | None = None
+    is_verified: bool | None = None
+    is_subscribed: bool | None = None
+    is_admin: bool | None = None
+    is_superadmin: bool | None = None
+
+
 class GrantSubscriptionRequest(BaseModel):
     plan: str = "monthly"
     duration_days: int = 30
@@ -573,6 +582,79 @@ async def get_user_detail(user_id: str, current_user: AdminUser, db: DB) -> User
         from app.core.exceptions import NotFoundError
 
         raise NotFoundError("User")
+
+    return UserDetailResponse(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        is_active=user.is_active,
+        is_verified=user.is_verified,
+        is_subscribed=user.is_subscribed,
+        is_admin=user.is_admin,
+        is_superadmin=user.is_superadmin,
+        is_2fa_enabled=user.is_2fa_enabled,
+        login_count=user.login_count,
+        last_login=user.last_login,
+        created_at=user.created_at,
+        wallet_count=len(user.wallets) if user.wallets else 0,
+        trade_count=len(user.trades) if user.trades else 0,
+        exchange_connection_count=len(user.exchange_connections)
+        if user.exchange_connections
+        else 0,
+        has_telegram=user.telegram_connection is not None and user.telegram_connection.is_verified,
+    )
+
+
+@router.put("/users/{user_id}")
+async def update_user(
+    user_id: str,
+    body: UserUpdateRequest,
+    current_user: SuperAdminUser,
+    db: DB,
+) -> UserDetailResponse:
+    """Update user fields directly."""
+    result = await db.execute(
+        select(User)
+        .options(
+            selectinload(User.wallets),
+            selectinload(User.trades),
+            selectinload(User.exchange_connections),
+            selectinload(User.telegram_connection),
+        )
+        .where(User.id == user_id)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        from app.core.exceptions import NotFoundError
+
+        raise NotFoundError("User")
+
+    # Prevent modifying own superadmin status
+    if user.id == current_user.id and body.is_superadmin is False:
+        from app.core.exceptions import AuthorizationError
+
+        raise AuthorizationError("Cannot remove your own superadmin status")
+
+    changes = []
+    for field in [
+        "full_name",
+        "is_active",
+        "is_verified",
+        "is_subscribed",
+        "is_admin",
+        "is_superadmin",
+    ]:
+        new_val = getattr(body, field, None)
+        if new_val is not None:
+            old_val = getattr(user, field)
+            if old_val != new_val:
+                setattr(user, field, new_val)
+                changes.append(f"{field}: {old_val} -> {new_val}")
+
+    await db.commit()
+
+    if changes:
+        logger.info(f"Admin {current_user.email} updated user {user.email}: {', '.join(changes)}")
 
     return UserDetailResponse(
         id=user.id,
