@@ -451,6 +451,29 @@ def _deserialize_value(raw: str, type_hint: str) -> Any:
     return raw
 
 
+async def load_config_overrides(db: AsyncSession) -> int:
+    """Load all DB config overrides into in-memory settings at startup.
+    Called from app lifespan so admin changes survive restarts."""
+    result = await db.execute(select(SystemConfig))
+    db_configs = {row.key: row.value for row in result.scalars().all()}
+
+    applied = 0
+    for key, raw_value in db_configs.items():
+        meta = CONFIGURABLE_SETTINGS.get(key)
+        if not meta:
+            continue
+        try:
+            deserialized = _deserialize_value(raw_value, meta["type"])
+            setattr(settings, key, deserialized)
+            applied += 1
+        except Exception as e:
+            logger.warning(f"Failed to apply config override {key}: {e}")
+
+    if applied:
+        logger.info(f"Loaded {applied} config override(s) from database")
+    return applied
+
+
 @router.get("/config")
 async def get_all_config(current_user: AdminUser, db: DB) -> dict[str, Any]:
     """Get all configurable settings with current values."""

@@ -45,6 +45,13 @@ async def lifespan(app: FastAPI):
     trade_stream_service = get_trade_stream_service()
     await trade_stream_service.start()
 
+    # Load runtime config overrides from DB (admin-set values survive restarts)
+    from app.api.v1.admin import load_config_overrides
+    from app.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as db:
+        await load_config_overrides(db)
+
     logger.info("Application startup complete")
     yield
 
