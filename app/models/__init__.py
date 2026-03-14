@@ -26,6 +26,7 @@ from app.models.subscription import (
     SubscriptionPlan,
     SubscriptionStatus,
 )
+from app.models.system_config import SystemConfig
 from app.models.trade import Trade, TradeCloseReason, TradeDirection, TradeStatus
 from app.models.user import User
 from app.models.wallet import Wallet, WalletStatus, WalletType
@@ -72,4 +73,6 @@ __all__ = [
     # Risk Settings
     "RiskSettings",
     "PositionSizingMethod",
+    # System Config
+    "SystemConfig",
 ]
