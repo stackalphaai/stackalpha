@@ -113,8 +113,15 @@ class RiskManagementService:
         risk_settings = result.scalar_one_or_none()
 
         if not risk_settings:
-            # Create default risk settings for this user
-            risk_settings = RiskSettings(user_id=user_id)
+            # Create default risk settings for this user, using admin-configured values
+            from app.config import settings as app_settings
+
+            risk_settings = RiskSettings(
+                user_id=user_id,
+                min_risk_reward_ratio=app_settings.llm_min_risk_reward_ratio,
+                max_leverage=app_settings.max_leverage,
+                max_position_size_percent=app_settings.max_position_size_percent,
+            )
             self.db.add(risk_settings)
             await self.db.flush()
 
@@ -126,21 +133,30 @@ class RiskManagementService:
             "risk_parity": PositionSizingMethod.RISK_PARITY,
         }
 
+        # Admin-configured values act as system-wide defaults/overrides
+        from app.config import settings as app_settings
+
         return RiskLimits(
             max_position_size_usd=float(risk_settings.max_position_size_usd),
-            max_position_size_percent=float(risk_settings.max_position_size_percent),
+            max_position_size_percent=max(
+                float(risk_settings.max_position_size_percent),
+                app_settings.max_position_size_percent,
+            ),
             risk_percent_per_trade=float(risk_settings.risk_percent_per_trade),
             position_sizing_method=sizing_method_map.get(
                 risk_settings.position_sizing_method, PositionSizingMethod.FIXED_PERCENT
             ),
             max_portfolio_heat=float(risk_settings.max_portfolio_heat),
             max_open_positions=risk_settings.max_open_positions,
-            max_leverage=risk_settings.max_leverage,
+            max_leverage=max(risk_settings.max_leverage, app_settings.max_leverage),
             max_daily_loss_usd=float(risk_settings.max_daily_loss_usd),
             max_daily_loss_percent=float(risk_settings.max_daily_loss_percent),
             max_weekly_loss_percent=float(risk_settings.max_weekly_loss_percent),
             max_monthly_loss_percent=float(risk_settings.max_monthly_loss_percent),
-            min_risk_reward_ratio=float(risk_settings.min_risk_reward_ratio),
+            min_risk_reward_ratio=min(
+                float(risk_settings.min_risk_reward_ratio),
+                app_settings.llm_min_risk_reward_ratio,
+            ),
             max_correlated_positions=risk_settings.max_correlated_positions,
             max_single_asset_exposure_percent=float(
                 risk_settings.max_single_asset_exposure_percent
