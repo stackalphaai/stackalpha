@@ -66,6 +66,9 @@ async def admin_trades_ws(websocket: WebSocket, token: str = Query(...)):
     from app.database import AsyncSessionLocal
     from app.models import User
 
+    # Must accept before we can close with a code
+    await websocket.accept()
+
     payload = decode_token(token)
     if not payload or payload.get("type") != "access":
         await websocket.close(code=4001, reason="Invalid or expired token")
@@ -83,8 +86,6 @@ async def admin_trades_ws(websocket: WebSocket, token: str = Query(...)):
         if not user or not user.is_admin:
             await websocket.close(code=4003, reason="Admin access required")
             return
-
-    await websocket.accept()
 
     service = get_trade_stream_service()
     await service.register_admin_client(websocket)
@@ -122,7 +123,9 @@ async def trades_ws(websocket: WebSocket, token: str = Query(...)):
         }
     }
     """
-    # Validate JWT token
+    # Must accept before we can close with a code
+    await websocket.accept()
+
     payload = decode_token(token)
     if not payload or payload.get("type") != "access":
         await websocket.close(code=4001, reason="Invalid or expired token")
@@ -132,8 +135,6 @@ async def trades_ws(websocket: WebSocket, token: str = Query(...)):
     if not user_id:
         await websocket.close(code=4001, reason="Invalid token payload")
         return
-
-    await websocket.accept()
 
     service = get_trade_stream_service()
     await service.register_client(user_id, websocket)
