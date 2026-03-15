@@ -111,24 +111,20 @@ def test_rr_ratio_from_signal():
 
 
 def test_max_position_size_cap():
-    """Verify position is capped by max_position_size_usd and max_position_size_percent."""
+    """Verify position is capped by max_position_size_percent (no dollar cap)."""
     equity = 10000.0
     risk_percent = 2.0
     stop_distance_pct = 0.005  # 0.5% tight SL
     leverage = 20
-    max_position_size_usd = 5000.0
     max_position_size_percent = 10.0
 
     max_loss = equity * (risk_percent / 100)  # $200
     risk_based_size = max_loss / (stop_distance_pct * leverage)  # $200 / 0.1 = $2000
 
-    # Cap by limits
-    clamped = min(
-        risk_based_size,
-        max_position_size_usd,
-        equity * (max_position_size_percent / 100),
-    )
-    assert clamped == min(2000.0, 5000.0, 1000.0)
+    # Cap by percentage only
+    max_by_percent = equity * (max_position_size_percent / 100)  # $1000
+    clamped = min(risk_based_size, max_by_percent)
+    assert clamped == min(2000.0, 1000.0)
     assert clamped == 1000.0  # Capped by 10% of equity
 
 
