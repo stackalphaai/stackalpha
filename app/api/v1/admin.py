@@ -1436,7 +1436,7 @@ async def admin_execute_signal_for_eligible_users(
 # ============================================================================
 
 
-@router.get("/trades", response_model=PaginatedResponse[TradeResponse])
+@router.get("/trades")
 async def list_all_trades(
     pagination: Pagination,
     current_user: AdminUser,
@@ -1444,27 +1444,39 @@ async def list_all_trades(
     status: TradeStatus | None = None,
     exchange: str | None = Query(None),
 ):
-    query = select(Trade)
+    base_query = select(Trade)
+    if status:
+        base_query = base_query.where(Trade.status == status)
+    if exchange:
+        base_query = base_query.where(Trade.exchange == exchange)
+
+    count_result = await db.execute(select(func.count()).select_from(base_query.subquery()))
+    total = count_result.scalar() or 0
+
+    query = select(Trade, User.email).join(User, Trade.user_id == User.id, isouter=True)
     if status:
         query = query.where(Trade.status == status)
     if exchange:
         query = query.where(Trade.exchange == exchange)
-
-    count_result = await db.execute(select(func.count()).select_from(query.subquery()))
-    total = count_result.scalar() or 0
-
-    query = query.order_by(Trade.created_at.desc())
-    query = query.offset(pagination.offset).limit(pagination.limit)
+    query = (
+        query.order_by(Trade.created_at.desc()).offset(pagination.offset).limit(pagination.limit)
+    )
 
     result = await db.execute(query)
-    trades = list(result.scalars().all())
+    rows = result.all()
 
-    return PaginatedResponse.create(
-        items=[TradeResponse.model_validate(t) for t in trades],
-        total=total,
-        page=pagination.page,
-        page_size=pagination.page_size,
-    )
+    items = []
+    for trade, email in rows:
+        data = TradeResponse.model_validate(trade).model_dump()
+        data["user_email"] = email or "—"
+        items.append(data)
+
+    return {
+        "items": items,
+        "total": total,
+        "page": pagination.page,
+        "page_size": pagination.page_size,
+    }
 
 
 @router.post("/trades/{trade_id}/force-close")
