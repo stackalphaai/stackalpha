@@ -97,6 +97,8 @@ async def _analyze_all_markets():
                 analyzed_count += 1
 
                 if signal:
+                    # Commit signal to DB before dispatching auto-execute
+                    await db.commit()
                     signals_generated.append(signal)
                     logger.info(
                         f"Signal generated for {symbol}: "
@@ -114,8 +116,6 @@ async def _analyze_all_markets():
                 await db.rollback()
                 analyzed_count += 1
                 continue
-
-        await db.commit()
 
         # Send Telegram notifications for new signals
         if signals_generated:
@@ -271,6 +271,8 @@ async def _analyze_binance_markets():
                 analyzed_count += 1
 
                 if signal:
+                    # Commit signal to DB before dispatching auto-execute
+                    await db.commit()
                     signals_generated.append(signal)
                     logger.info(
                         f"Binance signal generated for {symbol}: "
@@ -288,8 +290,6 @@ async def _analyze_binance_markets():
                 await db.rollback()
                 analyzed_count += 1
                 continue
-
-        await db.commit()
 
         # Telegram notifications
         if signals_generated:
