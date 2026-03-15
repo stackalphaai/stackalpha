@@ -54,9 +54,8 @@ def test_position_sizing_with_different_params():
     assert round(margin, 0) == 58.0
 
     notional = margin * leverage  # ~$290
-    quantity = notional / entry_price  # ~20 tokens
 
-    # Verify: if SL hits, loss = quantity * (entry - sl) * 1 (leverage baked into notional)
+    # Verify: if SL hits, loss = notional * stop_distance_pct
     # Actually: loss = position_size_in_tokens * price_diff
     # With leverage: loss = (notional / entry) * (entry - sl)
     # = notional * stop_distance_pct = margin * leverage * stop_distance_pct

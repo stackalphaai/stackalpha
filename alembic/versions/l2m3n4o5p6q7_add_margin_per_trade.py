@@ -29,11 +29,6 @@ def upgrade() -> None:
             server_default="10.0",
         ),
     )
-    # Drop old nullable dollar column if it exists (from prior migration attempt)
-    try:
-        op.drop_column("risk_settings", "margin_per_trade")
-    except Exception:
-        pass
 
 
 def downgrade() -> None:

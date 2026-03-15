@@ -28,11 +28,11 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.add_column(
         "risk_settings",
-        op.Column("max_daily_loss_usd", sa.Numeric(12, 2), nullable=False, server_default="500.0"),
+        sa.Column("max_daily_loss_usd", sa.Numeric(12, 2), nullable=False, server_default="500.0"),
     )
     op.add_column(
         "risk_settings",
-        op.Column(
+        sa.Column(
             "max_position_size_usd", sa.Numeric(12, 2), nullable=False, server_default="10000.0"
         ),
     )
