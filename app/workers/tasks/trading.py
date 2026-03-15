@@ -340,7 +340,11 @@ async def _auto_execute_binance_signal(signal_id: str):
 
     from app.core.exceptions import RiskLimitError
     from app.models import Signal, User
-    from app.models.exchange_connection import ExchangeConnection, ExchangeConnectionStatus
+    from app.models.exchange_connection import (
+        ExchangeConnection,
+        ExchangeConnectionStatus,
+        ExchangeType,
+    )
     from app.services.telegram_service import TelegramService
     from app.services.trading.binance_executor import BinanceTradeExecutor
     from app.workers.database import get_worker_db
@@ -353,7 +357,7 @@ async def _auto_execute_binance_signal(signal_id: str):
             logger.error(f"Signal {signal_id} not found for auto-execution")
             return
 
-        # Get all users with active Binance connections that have trading enabled
+        # Get all users with active BINANCE connections that have trading enabled
         result = await db.execute(
             select(User)
             .join(ExchangeConnection, ExchangeConnection.user_id == User.id)
@@ -362,6 +366,8 @@ async def _auto_execute_binance_signal(signal_id: str):
                 selectinload(User.telegram_connection),
             )
             .where(
+                ExchangeConnection.exchange_type == ExchangeType.BINANCE,
+                ExchangeConnection.is_testnet.is_(False),
                 ExchangeConnection.status == ExchangeConnectionStatus.ACTIVE,
                 ExchangeConnection.is_trading_enabled.is_(True),
                 User.is_subscribed.is_(True),
@@ -380,12 +386,15 @@ async def _auto_execute_binance_signal(signal_id: str):
         telegram_service = TelegramService(db)
 
         for user in users:
-            # Find the active trading connection for this user
+            # Find the active Binance trading connection for this user
             connection = next(
                 (
                     c
                     for c in user.exchange_connections
-                    if c.can_trade and c.status == ExchangeConnectionStatus.ACTIVE
+                    if c.can_trade
+                    and c.status == ExchangeConnectionStatus.ACTIVE
+                    and c.exchange_type == ExchangeType.BINANCE
+                    and not c.is_testnet
                 ),
                 None,
             )

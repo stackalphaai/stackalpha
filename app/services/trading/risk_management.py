@@ -155,7 +155,7 @@ class RiskManagementService:
             select(RiskSettings.min_signal_confidence).where(RiskSettings.user_id == user_id)
         )
         confidence = result.scalar_one_or_none()
-        return float(confidence) if confidence is not None else 0.7
+        return float(confidence) if confidence is not None else 0.55
 
     async def get_portfolio_metrics(self, user_id: str) -> PortfolioMetrics:
         """Calculate real-time portfolio metrics"""
