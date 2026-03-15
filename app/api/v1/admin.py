@@ -1203,6 +1203,181 @@ async def admin_execute_signal_for_user(
     }
 
 
+@router.post("/signals/{signal_id}/execute")
+async def admin_execute_signal_for_eligible_users(
+    signal_id: str,
+    current_user: SuperAdminUser,
+    db: DB,
+) -> dict[str, Any]:
+    """Execute a signal for all eligible users (subscribed with active connections)."""
+    from app.core.exceptions import RiskLimitError
+    from app.models.exchange_connection import (
+        ExchangeConnectionStatus,
+        ExchangeType,
+    )
+    from app.models.wallet import WalletStatus
+    from app.services.telegram_service import TelegramService
+    from app.services.trading.binance_executor import BinanceTradeExecutor
+    from app.services.trading.executor import TradeExecutor
+
+    # Find signal
+    result = await db.execute(select(Signal).where(Signal.id == signal_id))
+    signal = result.scalar_one_or_none()
+    if not signal:
+        from app.core.exceptions import NotFoundError
+
+        raise NotFoundError("Signal")
+
+    results: list[dict[str, Any]] = []
+
+    if signal.exchange == "binance":
+        # Get all users with active Binance connections
+        user_result = await db.execute(
+            select(User)
+            .join(ExchangeConnection, ExchangeConnection.user_id == User.id)
+            .options(
+                selectinload(User.exchange_connections),
+                selectinload(User.telegram_connection),
+            )
+            .where(
+                ExchangeConnection.exchange_type == ExchangeType.BINANCE,
+                ExchangeConnection.is_testnet.is_(False),
+                ExchangeConnection.status == ExchangeConnectionStatus.ACTIVE,
+                ExchangeConnection.is_trading_enabled.is_(True),
+                User.is_subscribed.is_(True),
+            )
+            .distinct()
+        )
+        users = list(user_result.scalars().all())
+
+        executor = BinanceTradeExecutor(db)
+        telegram_service = TelegramService(db)
+
+        for user in users:
+            connection = next(
+                (
+                    c
+                    for c in user.exchange_connections
+                    if c.can_trade
+                    and c.status == ExchangeConnectionStatus.ACTIVE
+                    and c.exchange_type == ExchangeType.BINANCE
+                    and not c.is_testnet
+                ),
+                None,
+            )
+            if not connection:
+                results.append({"user": user.email, "status": "skipped", "reason": "no connection"})
+                continue
+
+            try:
+                trade = await executor.execute_signal(
+                    user=user, exchange_connection=connection, signal=signal
+                )
+                results.append(
+                    {
+                        "user": user.email,
+                        "status": "executed",
+                        "trade_id": trade.id,
+                        "trade_status": trade.status.value,
+                    }
+                )
+
+                if (
+                    user.telegram_connection
+                    and user.telegram_connection.is_verified
+                    and user.telegram_connection.trade_notifications
+                ):
+                    try:
+                        await telegram_service.send_trade_opened_notification(
+                            user.telegram_connection, trade
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to send trade notification for user {user.id}: {e}")
+
+            except RiskLimitError as e:
+                results.append({"user": user.email, "status": "rejected", "reason": e.detail})
+            except Exception as e:
+                results.append({"user": user.email, "status": "error", "reason": str(e)})
+
+    else:
+        # Hyperliquid — get users with active wallets
+        user_result = await db.execute(
+            select(User)
+            .join(Wallet, Wallet.user_id == User.id)
+            .options(
+                selectinload(User.wallets),
+                selectinload(User.telegram_connection),
+            )
+            .where(
+                Wallet.status == WalletStatus.ACTIVE,
+                Wallet.is_authorized.is_(True),
+                Wallet.is_trading_enabled.is_(True),
+                User.is_subscribed.is_(True),
+            )
+            .distinct()
+        )
+        users = list(user_result.scalars().all())
+
+        executor = TradeExecutor(db)
+        telegram_service = TelegramService(db)
+
+        for user in users:
+            wallet = next((w for w in user.wallets if w.can_trade), None)
+            if not wallet:
+                results.append({"user": user.email, "status": "skipped", "reason": "no wallet"})
+                continue
+
+            try:
+                trade = await executor.execute_signal(user=user, wallet=wallet, signal=signal)
+                results.append(
+                    {
+                        "user": user.email,
+                        "status": "executed",
+                        "trade_id": trade.id,
+                        "trade_status": trade.status.value,
+                    }
+                )
+
+                if (
+                    user.telegram_connection
+                    and user.telegram_connection.is_verified
+                    and user.telegram_connection.trade_notifications
+                ):
+                    try:
+                        await telegram_service.send_trade_opened_notification(
+                            user.telegram_connection, trade
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to send trade notification for user {user.id}: {e}")
+
+            except RiskLimitError as e:
+                results.append({"user": user.email, "status": "rejected", "reason": e.detail})
+            except Exception as e:
+                results.append({"user": user.email, "status": "error", "reason": str(e)})
+
+    await db.commit()
+
+    executed = [r for r in results if r["status"] == "executed"]
+    rejected = [r for r in results if r["status"] == "rejected"]
+    errors = [r for r in results if r["status"] == "error"]
+
+    logger.info(
+        f"Admin {current_user.email} executed signal {signal_id} for eligible users: "
+        f"{len(executed)} executed, {len(rejected)} rejected, {len(errors)} errors"
+    )
+
+    return {
+        "signal_id": signal_id,
+        "symbol": signal.symbol,
+        "exchange": signal.exchange,
+        "total_eligible": len(results),
+        "executed": len(executed),
+        "rejected": len(rejected),
+        "errors": len(errors),
+        "details": results,
+    }
+
+
 # ============================================================================
 # Trades Management
 # ============================================================================
