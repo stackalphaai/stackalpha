@@ -1447,32 +1447,46 @@ async def force_close_trade(
 # ============================================================================
 
 
-@router.get("/subscriptions", response_model=PaginatedResponse[SubscriptionResponse])
+@router.get("/subscriptions")
 async def list_all_subscriptions(
     pagination: Pagination,
     current_user: AdminUser,
     db: DB,
     status: SubscriptionStatus | None = None,
 ):
-    query = select(Subscription)
+    base_query = select(Subscription)
     if status:
-        query = query.where(Subscription.status == status)
+        base_query = base_query.where(Subscription.status == status)
 
-    count_result = await db.execute(select(func.count()).select_from(query.subquery()))
+    count_result = await db.execute(select(func.count()).select_from(base_query.subquery()))
     total = count_result.scalar() or 0
 
-    query = query.order_by(Subscription.created_at.desc())
-    query = query.offset(pagination.offset).limit(pagination.limit)
+    query = select(Subscription, User.email).join(
+        User, Subscription.user_id == User.id, isouter=True
+    )
+    if status:
+        query = query.where(Subscription.status == status)
+    query = (
+        query.order_by(Subscription.created_at.desc())
+        .offset(pagination.offset)
+        .limit(pagination.limit)
+    )
 
     result = await db.execute(query)
-    subscriptions = list(result.scalars().all())
+    rows = result.all()
 
-    return PaginatedResponse.create(
-        items=[SubscriptionResponse.model_validate(s) for s in subscriptions],
-        total=total,
-        page=pagination.page,
-        page_size=pagination.page_size,
-    )
+    items = []
+    for s, email in rows:
+        data = SubscriptionResponse.model_validate(s).model_dump()
+        data["user_email"] = email or "—"
+        items.append(data)
+
+    return {
+        "items": items,
+        "total": total,
+        "page": pagination.page,
+        "page_size": pagination.page_size,
+    }
 
 
 @router.post("/subscriptions/{sub_id}/cancel")
@@ -1649,23 +1663,29 @@ async def list_exchange_connections(
     db: DB,
 ):
     """List all exchange connections across all users."""
-    query = select(ExchangeConnection)
+    base_query = select(ExchangeConnection)
 
-    count_result = await db.execute(select(func.count()).select_from(query.subquery()))
+    count_result = await db.execute(select(func.count()).select_from(base_query.subquery()))
     total = count_result.scalar() or 0
 
-    query = query.order_by(ExchangeConnection.created_at.desc())
-    query = query.offset(pagination.offset).limit(pagination.limit)
+    query = (
+        select(ExchangeConnection, User.email)
+        .join(User, ExchangeConnection.user_id == User.id, isouter=True)
+        .order_by(ExchangeConnection.created_at.desc())
+        .offset(pagination.offset)
+        .limit(pagination.limit)
+    )
 
     result = await db.execute(query)
-    connections = list(result.scalars().all())
+    rows = result.all()
 
     items = []
-    for conn in connections:
+    for conn, email in rows:
         items.append(
             {
                 "id": conn.id,
                 "user_id": conn.user_id,
+                "user_email": email or "—",
                 "exchange_type": conn.exchange_type,
                 "label": conn.label,
                 "is_testnet": conn.is_testnet,
@@ -1697,23 +1717,29 @@ async def list_wallets(
     db: DB,
 ):
     """List all wallets across all users."""
-    query = select(Wallet)
+    base_query = select(Wallet)
 
-    count_result = await db.execute(select(func.count()).select_from(query.subquery()))
+    count_result = await db.execute(select(func.count()).select_from(base_query.subquery()))
     total = count_result.scalar() or 0
 
-    query = query.order_by(Wallet.created_at.desc())
-    query = query.offset(pagination.offset).limit(pagination.limit)
+    query = (
+        select(Wallet, User.email)
+        .join(User, Wallet.user_id == User.id, isouter=True)
+        .order_by(Wallet.created_at.desc())
+        .offset(pagination.offset)
+        .limit(pagination.limit)
+    )
 
     result = await db.execute(query)
-    wallets = list(result.scalars().all())
+    rows = result.all()
 
     items = []
-    for w in wallets:
+    for w, email in rows:
         items.append(
             {
                 "id": w.id,
                 "user_id": w.user_id,
+                "user_email": email or "—",
                 "address": w.address,
                 "wallet_type": w.wallet_type,
                 "status": w.status,
