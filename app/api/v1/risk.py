@@ -38,7 +38,7 @@ def _serialize_risk_settings(settings: RiskSettings) -> RiskSettingsResponse:
             if hasattr(settings.position_sizing_method, "value")
             else str(settings.position_sizing_method)
         ),
-        margin_per_trade=float(settings.margin_per_trade) if settings.margin_per_trade else None,
+        margin_per_trade_percent=float(settings.margin_per_trade_percent),
         max_position_size_percent=float(settings.max_position_size_percent),
         risk_percent_per_trade=float(settings.risk_percent_per_trade),
         max_portfolio_heat=float(settings.max_portfolio_heat),

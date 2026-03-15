@@ -126,16 +126,16 @@ def test_max_position_size_cap():
     assert clamped == 1000.0  # Capped by 10% of equity
 
 
-def test_margin_per_trade_overrides_sizing():
-    """When margin_per_trade is set, it's used directly as the margin."""
-    margin_per_trade = 50.0
+def test_margin_per_trade_percent():
+    """Margin per trade is a percentage of available balance."""
+    margin_per_trade_percent = 10.0
     available_balance = 500.0
     leverage = 10
     current_price = 14.50
 
-    # Margin is capped by available balance
-    margin = min(margin_per_trade, available_balance)
-    assert margin == 50.0  # Uses the set margin
+    # Margin = balance * percent / 100
+    margin = available_balance * (margin_per_trade_percent / 100)
+    assert margin == 50.0
 
     notional = margin * leverage  # $500 notional
     assert notional == 500.0
@@ -143,27 +143,17 @@ def test_margin_per_trade_overrides_sizing():
     quantity = notional / current_price  # ~34.48 tokens
     assert round(quantity, 2) == 34.48
 
-    # If balance is lower than margin_per_trade, it's capped
-    low_balance = 30.0
-    capped_margin = min(margin_per_trade, low_balance)
-    assert capped_margin == 30.0  # Capped by balance
 
-
-def test_margin_per_trade_none_falls_back():
-    """When margin_per_trade is None, percentage-based sizing is used."""
-    margin_per_trade = None
+def test_margin_percent_capped_by_max_position():
+    """Margin is capped by max_position_size_percent if it's lower."""
+    margin_per_trade_percent = 20.0
+    max_position_size_percent = 10.0
     equity = 1000.0
-    risk_percent = 2.0
-    stop_distance_pct = 0.02
-    leverage = 10
 
-    if margin_per_trade and margin_per_trade > 0:
-        margin = margin_per_trade
-    else:
-        max_loss = equity * (risk_percent / 100)
-        margin = max_loss / (stop_distance_pct * leverage)
-
-    assert margin == 100.0  # Falls back to risk-based sizing
+    margin = equity * (margin_per_trade_percent / 100)  # $200
+    max_by_pct = equity * (max_position_size_percent / 100)  # $100
+    clamped = min(margin, max_by_pct)
+    assert clamped == 100.0  # Capped by max_position_size_percent
 
 
 if __name__ == "__main__":
@@ -172,6 +162,6 @@ if __name__ == "__main__":
     test_quantity_calculation()
     test_rr_ratio_from_signal()
     test_max_position_size_cap()
-    test_margin_per_trade_overrides_sizing()
-    test_margin_per_trade_none_falls_back()
+    test_margin_per_trade_percent()
+    test_margin_percent_capped_by_max_position()
     print("All tests passed!")

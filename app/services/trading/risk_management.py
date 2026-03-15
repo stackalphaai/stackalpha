@@ -37,7 +37,7 @@ class RiskLimits:
     """User-defined risk limits"""
 
     # Position Sizing
-    margin_per_trade: float | None = None  # Fixed margin in USD (overrides % sizing)
+    margin_per_trade_percent: float = 10.0  # % of balance used as margin per trade
     max_position_size_percent: float = 10.0  # % of portfolio
     risk_percent_per_trade: float = 2.0  # % of equity risked per trade
     position_sizing_method: PositionSizingMethod = PositionSizingMethod.FIXED_PERCENT
@@ -136,9 +136,7 @@ class RiskManagementService:
 
         # User's risk settings are authoritative — return them directly
         return RiskLimits(
-            margin_per_trade=(
-                float(risk_settings.margin_per_trade) if risk_settings.margin_per_trade else None
-            ),
+            margin_per_trade_percent=float(risk_settings.margin_per_trade_percent),
             max_position_size_percent=float(risk_settings.max_position_size_percent),
             risk_percent_per_trade=float(risk_settings.risk_percent_per_trade),
             position_sizing_method=sizing_method_map.get(
@@ -519,30 +517,13 @@ class RiskManagementService:
         # 2. Use user's leverage setting directly
         clamped_leverage = max(1, limits.leverage)
 
-        # 3. Position sizing
+        # 3. Position sizing — margin = balance * margin_per_trade_percent / 100
         equity = available_balance if available_balance > 0 else position_size_usd
+        clamped_size = equity * (limits.margin_per_trade_percent / 100)
 
-        if limits.margin_per_trade and limits.margin_per_trade > 0:
-            # User has set a fixed margin — use it directly
-            clamped_size = min(limits.margin_per_trade, equity)
-        else:
-            # Fall back to risk-based position sizing
-            stop_distance_pct = (
-                abs(entry_price - stop_loss_price) / entry_price if entry_price > 0 else 0
-            )
-
-            if stop_distance_pct > 0 and limits.risk_percent_per_trade > 0:
-                max_loss = equity * (limits.risk_percent_per_trade / 100)
-                risk_based_size = max_loss / (stop_distance_pct * clamped_leverage)
-                max_by_percent = equity * (limits.max_position_size_percent / 100)
-                clamped_size = min(risk_based_size, max_by_percent)
-            else:
-                max_by_percent = (
-                    equity * (limits.max_position_size_percent / 100)
-                    if equity > 0
-                    else position_size_usd
-                )
-                clamped_size = min(position_size_usd, max_by_percent)
+        # Also cap by max_position_size_percent
+        max_by_percent = equity * (limits.max_position_size_percent / 100)
+        clamped_size = min(clamped_size, max_by_percent)
 
         # Ensure position size is positive
         clamped_size = max(0, clamped_size)

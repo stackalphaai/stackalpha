@@ -1,4 +1,4 @@
-"""Add margin_per_trade to risk_settings
+"""Add margin_per_trade_percent to risk_settings
 
 Revision ID: l2m3n4o5p6q7
 Revises: k1l2m3n4o5p6
@@ -22,9 +22,19 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.add_column(
         "risk_settings",
-        sa.Column("margin_per_trade", sa.Numeric(12, 2), nullable=True),
+        sa.Column(
+            "margin_per_trade_percent",
+            sa.Numeric(5, 2),
+            nullable=False,
+            server_default="10.0",
+        ),
     )
+    # Drop old nullable dollar column if it exists (from prior migration attempt)
+    try:
+        op.drop_column("risk_settings", "margin_per_trade")
+    except Exception:
+        pass
 
 
 def downgrade() -> None:
-    op.drop_column("risk_settings", "margin_per_trade")
+    op.drop_column("risk_settings", "margin_per_trade_percent")
