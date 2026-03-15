@@ -547,12 +547,23 @@ async def _monitor_binance_tpsl():
                     finally:
                         await binance_exchange.close()
 
-                    # Get exit price
+                    # Get exit price — skip closing if we can't fetch it
                     try:
                         market_data = await info_service.get_market_data(binance_symbol)
                         exit_price = market_data.get("mark_price", 0)
-                    except Exception:
-                        exit_price = 0
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to get market data for {binance_symbol}, "
+                            f"skipping close for trade {trade.id}: {e}"
+                        )
+                        continue
+
+                    if not exit_price:
+                        logger.warning(
+                            f"Got zero exit price for {binance_symbol}, "
+                            f"skipping close for trade {trade.id}"
+                        )
+                        continue
 
                     trade.exit_price = exit_price
                     trade.status = TradeStatus.CLOSED

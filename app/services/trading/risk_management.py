@@ -13,6 +13,7 @@ Implements professional risk management strategies:
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from decimal import Decimal
 from enum import Enum
 
 from sqlalchemy import func, select
@@ -186,7 +187,7 @@ class RiskManagementService:
                 Trade.closed_at >= today_start,
             )
         )
-        daily_pnl = float(today_pnl_result.scalar() or 0)
+        daily_pnl = Decimal(str(today_pnl_result.scalar() or 0))
 
         # Calculate weekly P&L
         week_start = today_start - timedelta(days=today_start.weekday())
@@ -197,7 +198,7 @@ class RiskManagementService:
                 Trade.closed_at >= week_start,
             )
         )
-        weekly_pnl = float(weekly_pnl_result.scalar() or 0)
+        weekly_pnl = Decimal(str(weekly_pnl_result.scalar() or 0))
 
         # Calculate monthly P&L
         month_start = today_start.replace(day=1)
@@ -208,7 +209,7 @@ class RiskManagementService:
                 Trade.closed_at >= month_start,
             )
         )
-        monthly_pnl = float(monthly_pnl_result.scalar() or 0)
+        monthly_pnl = Decimal(str(monthly_pnl_result.scalar() or 0))
 
         # Calculate consecutive losses
         recent_trades_result = await self.db.execute(

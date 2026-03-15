@@ -22,6 +22,17 @@ class BinanceClient:
         self._client: AsyncClient | None = None
 
     async def get_client(self) -> AsyncClient:
+        # Check if the cached client's event loop is still running.
+        # Celery workers call asyncio.run() per task, which closes the loop
+        # after each task — any cached aiohttp session becomes stale.
+        if self._client is not None:
+            try:
+                loop = self._client.session._loop  # type: ignore[attr-defined]
+                if loop.is_closed():
+                    await self.close()
+            except Exception:
+                await self.close()
+
         if self._client is None:
             try:
                 self._client = await AsyncClient.create(
