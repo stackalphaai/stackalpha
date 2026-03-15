@@ -66,6 +66,11 @@ class DashboardStats(BaseModel):
     active_signals: int
     total_revenue: float
     pending_payouts: float
+    total_wallet_balance: float
+    total_exchange_balance: float
+    total_unrealized_pnl: float
+    active_wallets: int
+    active_exchanges: int
 
 
 class SystemHealthResponse(BaseModel):
@@ -321,6 +326,49 @@ async def get_admin_dashboard(current_user: AdminUser, db: DB):
         or 0
     )
 
+    # Wallet & exchange balances
+    from app.models.exchange_connection import ExchangeConnectionStatus
+    from app.models.wallet import WalletStatus
+
+    total_wallet_balance = (
+        await db.scalar(
+            select(func.sum(Wallet.balance_usd)).where(Wallet.status == WalletStatus.ACTIVE)
+        )
+        or 0
+    )
+    active_wallets = (
+        await db.scalar(select(func.count(Wallet.id)).where(Wallet.status == WalletStatus.ACTIVE))
+        or 0
+    )
+
+    total_exchange_balance = (
+        await db.scalar(
+            select(func.sum(ExchangeConnection.balance_usd)).where(
+                ExchangeConnection.status == ExchangeConnectionStatus.ACTIVE
+            )
+        )
+        or 0
+    )
+    active_exchanges = (
+        await db.scalar(
+            select(func.count(ExchangeConnection.id)).where(
+                ExchangeConnection.status == ExchangeConnectionStatus.ACTIVE
+            )
+        )
+        or 0
+    )
+
+    total_unrealized_pnl = 0
+    wallet_pnl = await db.scalar(
+        select(func.sum(Wallet.unrealized_pnl)).where(Wallet.status == WalletStatus.ACTIVE)
+    )
+    exchange_pnl = await db.scalar(
+        select(func.sum(ExchangeConnection.unrealized_pnl)).where(
+            ExchangeConnection.status == ExchangeConnectionStatus.ACTIVE
+        )
+    )
+    total_unrealized_pnl = float(wallet_pnl or 0) + float(exchange_pnl or 0)
+
     return DashboardStats(
         total_users=total_users or 0,
         active_users=active_users or 0,
@@ -332,6 +380,11 @@ async def get_admin_dashboard(current_user: AdminUser, db: DB):
         active_signals=active_signals or 0,
         total_revenue=float(total_revenue),
         pending_payouts=float(pending_payouts),
+        total_wallet_balance=float(total_wallet_balance),
+        total_exchange_balance=float(total_exchange_balance),
+        total_unrealized_pnl=total_unrealized_pnl,
+        active_wallets=active_wallets,
+        active_exchanges=active_exchanges,
     )
 
 
