@@ -113,7 +113,7 @@ class RiskManagementService:
         risk_settings = result.scalar_one_or_none()
 
         if not risk_settings:
-            # Create default risk settings for this user, using admin-configured values
+            # Create default risk settings using admin-configured values
             from app.config import settings as app_settings
 
             risk_settings = RiskSettings(
@@ -133,30 +133,22 @@ class RiskManagementService:
             "risk_parity": PositionSizingMethod.RISK_PARITY,
         }
 
-        # Admin-configured values act as system-wide defaults/overrides
-        from app.config import settings as app_settings
-
+        # User's risk settings are authoritative — return them directly
         return RiskLimits(
             max_position_size_usd=float(risk_settings.max_position_size_usd),
-            max_position_size_percent=max(
-                float(risk_settings.max_position_size_percent),
-                app_settings.max_position_size_percent,
-            ),
+            max_position_size_percent=float(risk_settings.max_position_size_percent),
             risk_percent_per_trade=float(risk_settings.risk_percent_per_trade),
             position_sizing_method=sizing_method_map.get(
                 risk_settings.position_sizing_method, PositionSizingMethod.FIXED_PERCENT
             ),
             max_portfolio_heat=float(risk_settings.max_portfolio_heat),
             max_open_positions=risk_settings.max_open_positions,
-            max_leverage=max(risk_settings.max_leverage, app_settings.max_leverage),
+            max_leverage=risk_settings.max_leverage,
             max_daily_loss_usd=float(risk_settings.max_daily_loss_usd),
             max_daily_loss_percent=float(risk_settings.max_daily_loss_percent),
             max_weekly_loss_percent=float(risk_settings.max_weekly_loss_percent),
             max_monthly_loss_percent=float(risk_settings.max_monthly_loss_percent),
-            min_risk_reward_ratio=min(
-                float(risk_settings.min_risk_reward_ratio),
-                app_settings.llm_min_risk_reward_ratio,
-            ),
+            min_risk_reward_ratio=float(risk_settings.min_risk_reward_ratio),
             max_correlated_positions=risk_settings.max_correlated_positions,
             max_single_asset_exposure_percent=float(
                 risk_settings.max_single_asset_exposure_percent
@@ -535,22 +527,32 @@ class RiskManagementService:
         # 2. Clamp leverage to user's max
         clamped_leverage = max(1, min(proposed_leverage, limits.max_leverage))
 
-        # 3. Risk-based position sizing using risk_percent_per_trade
-        # Formula: risk_amount = equity * risk% => position_size = risk_amount / sl_distance%
-        # This ensures that if SL is hit, the loss equals risk_percent_per_trade% of equity.
+        # 3. Risk-based position sizing
+        # With leverage, PnL = position_size_usd * stop_distance_pct * leverage
+        # We want: max_loss = equity * risk_percent_per_trade / 100
+        # So: position_size_usd = max_loss / (stop_distance_pct * leverage)
         equity = available_balance if available_balance > 0 else position_size_usd
         stop_distance_pct = (
             abs(entry_price - stop_loss_price) / entry_price if entry_price > 0 else 0
         )
 
         if stop_distance_pct > 0 and limits.risk_percent_per_trade > 0:
-            risk_amount = equity * (limits.risk_percent_per_trade / 100)
-            # Account for leverage: leveraged SL distance = stop_distance_pct * leverage
-            risk_based_size = risk_amount / (stop_distance_pct * clamped_leverage)
-            # Use risk-based size as the position size, capped by max allowed
-            clamped_size = min(risk_based_size, limits.max_position_size_usd)
+            max_loss = equity * (limits.risk_percent_per_trade / 100)
+            risk_based_size = max_loss / (stop_distance_pct * clamped_leverage)
+            # Cap by user's max position size and available balance
+            clamped_size = min(
+                risk_based_size,
+                limits.max_position_size_usd,
+                equity * (limits.max_position_size_percent / 100),
+            )
         else:
-            clamped_size = min(position_size_usd, limits.max_position_size_usd)
+            clamped_size = min(
+                position_size_usd,
+                limits.max_position_size_usd,
+                equity * (limits.max_position_size_percent / 100)
+                if equity > 0
+                else position_size_usd,
+            )
 
         # Ensure position size is positive
         clamped_size = max(0, clamped_size)

@@ -86,9 +86,10 @@ class BinanceTradeExecutor:
             market_data = await self.info_service.get_market_data(binance_symbol)
             current_price = market_data.get("mark_price", float(signal.entry_price))
 
-            # Calculate quantity
+            # Calculate quantity: position_size_usd is margin, notional = margin * leverage
+            notional_usd = position_size_usd * leverage_val
             position_size = round(
-                position_size_usd / current_price,
+                notional_usd / current_price,
                 precision["quantity_precision"],
             )
 
@@ -102,7 +103,8 @@ class BinanceTradeExecutor:
                 direction=TradeDirection(signal.direction.value),
                 status=TradeStatus.PENDING,
                 position_size=position_size,
-                position_size_usd=position_size_usd,
+                position_size_usd=notional_usd,
+                margin_used=position_size_usd,
                 leverage=leverage_val,
                 take_profit_price=signal.take_profit_price,
                 stop_loss_price=signal.stop_loss_price,

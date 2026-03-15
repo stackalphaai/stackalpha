@@ -80,7 +80,9 @@ class TradeExecutor:
         market_data = await self.info_service.get_market_data(signal.symbol)
         current_price = market_data.get("mark_price", signal.entry_price)
 
-        position_size = position_size_usd / current_price
+        # position_size_usd is margin; notional = margin * leverage
+        notional_usd = position_size_usd * leverage_val
+        position_size = notional_usd / current_price
 
         trade = Trade(
             user_id=user.id,
@@ -90,7 +92,8 @@ class TradeExecutor:
             direction=TradeDirection(signal.direction.value),
             status=TradeStatus.PENDING,
             position_size=position_size,
-            position_size_usd=position_size_usd,
+            position_size_usd=notional_usd,
+            margin_used=position_size_usd,
             leverage=leverage_val,
             take_profit_price=signal.take_profit_price,
             stop_loss_price=signal.stop_loss_price,
