@@ -1731,3 +1731,92 @@ async def list_wallets(
         "page": pagination.page,
         "page_size": pagination.page_size,
     }
+
+
+# ============================================================================
+# Live Logs
+# ============================================================================
+
+LOG_FILES = {
+    "api": "/var/log/stackalpha/error.log",
+    "celery-worker": "/var/log/stackalpha/celery-worker.log",
+    "celery-beat": "/var/log/stackalpha/celery-beat.log",
+}
+
+
+@router.get("/logs")
+async def get_logs(
+    current_user: SuperAdminUser,
+    source: str = Query("celery-worker"),
+    lines: int = Query(200, ge=1, le=2000),
+    search: str | None = Query(None),
+) -> dict[str, Any]:
+    """Get recent log lines from a log file."""
+    import os
+
+    log_path = LOG_FILES.get(source)
+    if not log_path:
+        return {"lines": [], "error": f"Unknown log source: {source}"}
+
+    if not os.path.exists(log_path):
+        return {"lines": [], "error": f"Log file not found: {log_path}"}
+
+    try:
+        with open(log_path, "rb") as f:
+            f.seek(0, 2)
+            file_size = f.tell()
+            read_size = min(file_size, 512_000)
+            f.seek(max(0, file_size - read_size))
+            content = f.read().decode("utf-8", errors="replace")
+
+        all_lines = content.splitlines()
+        recent = all_lines[-lines:]
+
+        if search:
+            search_lower = search.lower()
+            recent = [line for line in recent if search_lower in line.lower()]
+
+        return {
+            "source": source,
+            "lines": recent,
+            "total_lines": len(recent),
+            "available_sources": list(LOG_FILES.keys()),
+        }
+    except Exception as e:
+        return {"lines": [], "error": str(e)}
+
+
+@router.get("/logs/stream")
+async def stream_logs(
+    current_user: SuperAdminUser,
+    source: str = Query("celery-worker"),
+):
+    """Stream log lines via SSE (Server-Sent Events)."""
+    import asyncio
+    import os
+
+    from starlette.responses import StreamingResponse
+
+    log_path = LOG_FILES.get(source)
+    if not log_path or not os.path.exists(log_path):
+        return {"error": f"Log file not available: {source}"}
+
+    async def log_generator():
+        with open(log_path) as f:
+            f.seek(0, 2)
+            while True:
+                line = f.readline()
+                if line:
+                    yield f"data: {line.rstrip()}\n\n"
+                else:
+                    await asyncio.sleep(0.5)
+
+    return StreamingResponse(
+        log_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
