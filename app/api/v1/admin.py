@@ -1140,7 +1140,7 @@ async def admin_execute_signal_for_user(
     current_user: SuperAdminUser,
     db: DB,
 ) -> dict[str, Any]:
-    """Force-execute a signal for a specific user. Bypasses risk checks."""
+    """Execute a signal for a specific user. User's risk settings are enforced."""
     from app.models.exchange_connection import (
         ExchangeConnectionStatus,
         ExchangeType,

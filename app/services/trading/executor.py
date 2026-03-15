@@ -162,7 +162,9 @@ class TradeExecutor:
         limits = await risk_service.get_risk_limits(user.id)
         leverage = max(1, limits.leverage)
 
-        position_size = position_size_usd / current_price
+        # position_size_usd is margin; notional = margin * leverage
+        notional_usd = position_size_usd * leverage
+        position_size = notional_usd / current_price
 
         trade = Trade(
             user_id=user.id,
@@ -171,7 +173,8 @@ class TradeExecutor:
             direction=direction,
             status=TradeStatus.PENDING,
             position_size=position_size,
-            position_size_usd=position_size_usd,
+            position_size_usd=notional_usd,
+            margin_used=position_size_usd,
             leverage=leverage,
             take_profit_price=take_profit_price,
             stop_loss_price=stop_loss_price,
