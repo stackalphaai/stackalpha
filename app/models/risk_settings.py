@@ -33,6 +33,9 @@ class RiskSettings(Base):
         nullable=False,
         default=PositionSizingMethod.FIXED_PERCENT,
     )
+    margin_per_trade: Mapped[float | None] = mapped_column(
+        Numeric(12, 2), nullable=True, default=None
+    )
     max_position_size_percent: Mapped[float] = mapped_column(
         Numeric(5, 2), nullable=False, default=10.0
     )
