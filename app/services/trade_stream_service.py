@@ -26,9 +26,11 @@ class TradeStreamService:
 
     def __init__(self):
         self._user_clients: dict[str, set[WebSocket]] = {}
+        self._admin_clients: set[WebSocket] = set()
         self._running = False
         self._broadcast_task: asyncio.Task | None = None
         self._last_payloads: dict[str, str] = {}
+        self._last_admin_payload: str = ""
 
     async def start(self):
         if self._running:
@@ -53,7 +55,29 @@ class TradeStreamService:
                 except Exception:
                     pass
         self._user_clients.clear()
+
+        for client in list(self._admin_clients):
+            try:
+                await client.close()
+            except Exception:
+                pass
+        self._admin_clients.clear()
         logger.info("TradeStreamService stopped")
+
+    async def register_admin_client(self, websocket: WebSocket):
+        self._admin_clients.add(websocket)
+        logger.info(f"Admin trade stream client connected. Total: {len(self._admin_clients)}")
+        # Send initial payload immediately
+        try:
+            payload = await self._build_admin_payload()
+            if payload:
+                await websocket.send_text(payload)
+        except Exception:
+            self._admin_clients.discard(websocket)
+
+    def unregister_admin_client(self, websocket: WebSocket):
+        self._admin_clients.discard(websocket)
+        logger.info(f"Admin trade stream client disconnected. Total: {len(self._admin_clients)}")
 
     async def register_client(self, user_id: str, websocket: WebSocket):
         if user_id not in self._user_clients:
@@ -91,6 +115,10 @@ class TradeStreamService:
         while self._running:
             try:
                 await asyncio.sleep(2)
+
+                # Broadcast to admin clients
+                if self._admin_clients:
+                    await self._broadcast_to_admins()
 
                 if not self._user_clients:
                     continue
@@ -275,6 +303,131 @@ class TradeStreamService:
 
         except Exception as e:
             logger.error(f"Error building trade payload for user {user_id}: {e}")
+            return None
+
+    async def _broadcast_to_admins(self):
+        try:
+            payload = await self._build_admin_payload()
+            if not payload or payload == self._last_admin_payload:
+                return
+            self._last_admin_payload = payload
+
+            disconnected = set()
+            for client in self._admin_clients:
+                try:
+                    await client.send_text(payload)
+                except Exception:
+                    disconnected.add(client)
+            self._admin_clients -= disconnected
+        except Exception as e:
+            logger.error(f"Error broadcasting to admin clients: {e}")
+
+    async def _build_admin_payload(self) -> str | None:
+        """Build a JSON payload with ALL open trades across all users."""
+        try:
+            async with AsyncSessionLocal() as db:
+                from app.models import User
+
+                result = await db.execute(
+                    select(Trade, User.email)
+                    .join(User, Trade.user_id == User.id, isouter=True)
+                    .where(Trade.status.in_([TradeStatus.OPEN, TradeStatus.OPENING]))
+                    .order_by(Trade.created_at.desc())
+                )
+                rows = result.all()
+
+            if not rows:
+                return json.dumps(
+                    {
+                        "type": "admin_trades_update",
+                        "timestamp": time.time(),
+                        "data": {"trades": [], "summary": {}},
+                    }
+                )
+
+            top_gainers_svc = get_top_gainers_service()
+            hl_prices = top_gainers_svc.get_mid_prices()
+
+            binance_price_svc = get_binance_price_service()
+            binance_prices = binance_price_svc.get_prices()
+
+            trade_data = []
+            total_unrealized_pnl = 0.0
+            total_margin_used = 0.0
+
+            for trade, email in rows:
+                exchange = trade.exchange or "hyperliquid"
+                symbol = trade.symbol
+                entry_price = float(trade.entry_price) if trade.entry_price else 0
+
+                if exchange == "binance":
+                    current_price = binance_prices.get(symbol, 0) or entry_price
+                else:
+                    current_price = hl_prices.get(symbol, 0) or entry_price
+
+                position_size = float(trade.position_size) if trade.position_size else 0
+                leverage = trade.leverage or 1
+
+                unrealized_pnl = 0.0
+                unrealized_pnl_pct = 0.0
+                if current_price > 0 and entry_price > 0 and position_size > 0:
+                    if trade.direction == TradeDirection.LONG:
+                        raw_pnl = (current_price - entry_price) * position_size
+                    else:
+                        raw_pnl = (entry_price - current_price) * position_size
+                    unrealized_pnl = raw_pnl * leverage
+                    cost_basis = entry_price * position_size
+                    if cost_basis > 0:
+                        unrealized_pnl_pct = (raw_pnl / cost_basis) * 100 * leverage
+
+                margin = float(trade.margin_used) if trade.margin_used else None
+                total_unrealized_pnl += unrealized_pnl
+                total_margin_used += margin or 0
+
+                trade_data.append(
+                    {
+                        "id": str(trade.id),
+                        "user_email": email or "—",
+                        "symbol": symbol,
+                        "exchange": exchange,
+                        "direction": trade.direction.value if trade.direction else "long",
+                        "status": trade.status.value if trade.status else "open",
+                        "entry_price": entry_price,
+                        "current_price": round(current_price, 6),
+                        "take_profit_price": (
+                            float(trade.take_profit_price) if trade.take_profit_price else None
+                        ),
+                        "stop_loss_price": (
+                            float(trade.stop_loss_price) if trade.stop_loss_price else None
+                        ),
+                        "position_size_usd": round(
+                            float(trade.position_size_usd) if trade.position_size_usd else 0, 2
+                        ),
+                        "leverage": leverage,
+                        "margin_used": round(margin, 2) if margin else None,
+                        "unrealized_pnl": round(unrealized_pnl, 2),
+                        "unrealized_pnl_percent": round(unrealized_pnl_pct, 2),
+                        "opened_at": trade.opened_at.isoformat() if trade.opened_at else None,
+                    }
+                )
+
+            return json.dumps(
+                {
+                    "type": "admin_trades_update",
+                    "timestamp": time.time(),
+                    "data": {
+                        "trades": trade_data,
+                        "summary": {
+                            "total_open": len(trade_data),
+                            "total_unrealized_pnl": round(total_unrealized_pnl, 2),
+                            "total_margin_used": round(total_margin_used, 2),
+                        },
+                    },
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Error building admin trade payload: {e}")
             return None
 
     async def _update_binance_tracked_symbols(self):

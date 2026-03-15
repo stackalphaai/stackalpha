@@ -52,6 +52,56 @@ async def top_gainers_ws(websocket: WebSocket):
         service.unregister_client(websocket)
 
 
+@router.websocket("/admin/trades")
+async def admin_trades_ws(websocket: WebSocket, token: str = Query(...)):
+    """
+    Admin WebSocket endpoint for real-time ALL open trades.
+
+    Requires JWT access token from an admin user: /ws/admin/trades?token=<jwt>
+
+    Streams all open trades across all users with live prices and PnL every 2s.
+    """
+    from sqlalchemy import select
+
+    from app.database import AsyncSessionLocal
+    from app.models import User
+
+    payload = decode_token(token)
+    if not payload or payload.get("type") != "access":
+        await websocket.close(code=4001, reason="Invalid or expired token")
+        return
+
+    user_id = payload.get("sub")
+    if not user_id:
+        await websocket.close(code=4001, reason="Invalid token payload")
+        return
+
+    # Verify user is admin
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user or not user.is_admin:
+            await websocket.close(code=4003, reason="Admin access required")
+            return
+
+    await websocket.accept()
+
+    service = get_trade_stream_service()
+    await service.register_admin_client(websocket)
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text('{"type":"pong"}')
+    except WebSocketDisconnect:
+        logger.debug("Admin trade stream client disconnected")
+    except Exception as e:
+        logger.debug(f"Admin trade stream client error: {e}")
+    finally:
+        service.unregister_admin_client(websocket)
+
+
 @router.websocket("/trades")
 async def trades_ws(websocket: WebSocket, token: str = Query(...)):
     """
