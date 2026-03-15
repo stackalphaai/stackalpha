@@ -121,6 +121,7 @@ class RiskManagementService:
                 min_risk_reward_ratio=app_settings.llm_min_risk_reward_ratio,
                 max_leverage=app_settings.max_leverage,
                 max_position_size_percent=app_settings.max_position_size_percent,
+                min_signal_confidence=app_settings.llm_min_confidence,
             )
             self.db.add(risk_settings)
             await self.db.flush()
