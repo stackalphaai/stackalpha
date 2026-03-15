@@ -24,7 +24,7 @@ def create_worker_engine():
         pool_size=5,
         max_overflow=10,
         pool_pre_ping=True,
-        echo=settings.debug,
+        echo=False,
     )
 
 

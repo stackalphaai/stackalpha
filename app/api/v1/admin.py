@@ -1743,6 +1743,18 @@ LOG_FILES = {
     "celery-beat": "/var/log/stackalpha/celery-beat.log",
 }
 
+# Noise patterns to filter out from logs by default
+LOG_NOISE_PATTERNS = (
+    "INFO sqlalchemy.engine.Engine",
+    "sqlalchemy.engine.Engine",
+    "[raw sql] ()",
+    "[generated in ",
+    "select pg_catalog.version()",
+    "select current_schema()",
+    "show standard_conforming_strings",
+    "BEGIN (implicit)",
+)
+
 
 @router.get("/logs")
 async def get_logs(
@@ -1750,6 +1762,7 @@ async def get_logs(
     source: str = Query("celery-worker"),
     lines: int = Query(200, ge=1, le=2000),
     search: str | None = Query(None),
+    filter_noise: bool = Query(True),
 ) -> dict[str, Any]:
     """Get recent log lines from a log file."""
     import os
@@ -1765,11 +1778,19 @@ async def get_logs(
         with open(log_path, "rb") as f:
             f.seek(0, 2)
             file_size = f.tell()
-            read_size = min(file_size, 512_000)
+            # Read more to compensate for filtered lines
+            read_size = min(file_size, 1_024_000)
             f.seek(max(0, file_size - read_size))
             content = f.read().decode("utf-8", errors="replace")
 
         all_lines = content.splitlines()
+
+        # Filter out noisy SQLAlchemy / engine lines
+        if filter_noise:
+            all_lines = [
+                line for line in all_lines if not any(p in line for p in LOG_NOISE_PATTERNS)
+            ]
+
         recent = all_lines[-lines:]
 
         if search:
@@ -1807,7 +1828,9 @@ async def stream_logs(
             while True:
                 line = f.readline()
                 if line:
-                    yield f"data: {line.rstrip()}\n\n"
+                    stripped = line.rstrip()
+                    if not any(p in stripped for p in LOG_NOISE_PATTERNS):
+                        yield f"data: {stripped}\n\n"
                 else:
                     await asyncio.sleep(0.5)
 
