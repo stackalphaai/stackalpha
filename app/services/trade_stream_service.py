@@ -72,7 +72,11 @@ class TradeStreamService:
             payload = await self._build_admin_payload()
             if payload:
                 await websocket.send_text(payload)
-        except Exception:
+                logger.info(f"Sent initial admin payload ({len(payload)} bytes)")
+            else:
+                logger.warning("No initial admin payload to send (empty or error)")
+        except Exception as e:
+            logger.error(f"Failed to send initial admin payload: {e}")
             self._admin_clients.discard(websocket)
 
     def unregister_admin_client(self, websocket: WebSocket):
@@ -341,7 +345,14 @@ class TradeStreamService:
                     {
                         "type": "admin_trades_update",
                         "timestamp": time.time(),
-                        "data": {"trades": [], "summary": {}},
+                        "data": {
+                            "trades": [],
+                            "summary": {
+                                "total_open": 0,
+                                "total_unrealized_pnl": 0,
+                                "total_margin_used": 0,
+                            },
+                        },
                     }
                 )
 
