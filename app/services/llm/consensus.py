@@ -194,7 +194,7 @@ class ConsensusEngine:
         )
         leverage = int(sum(leverages) / len(leverages)) if leverages else 5
 
-        leverage = max(1, min(leverage, settings.max_leverage))
+        leverage = max(1, min(leverage, settings.default_leverage))
 
         # Clamp TP/SL to configured ranges
         take_profit = self._clamp_tp(entry_price, take_profit, winning_direction)

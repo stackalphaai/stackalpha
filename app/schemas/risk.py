@@ -8,17 +8,15 @@ from app.schemas.common import BaseSchema
 class RiskSettingsResponse(BaseSchema):
     # Position Sizing
     position_sizing_method: str
-    max_position_size_usd: float
     max_position_size_percent: float
     risk_percent_per_trade: float = 2.0
 
     # Portfolio Limits
     max_portfolio_heat: float
     max_open_positions: int
-    max_leverage: int
+    leverage: int
 
     # Drawdown Limits
-    max_daily_loss_usd: float
     max_daily_loss_percent: float
     max_weekly_loss_percent: float
     max_monthly_loss_percent: float
@@ -45,17 +43,15 @@ class RiskSettingsResponse(BaseSchema):
 class UpdateRiskSettingsRequest(BaseModel):
     # Position Sizing
     position_sizing_method: str | None = None
-    max_position_size_usd: float | None = Field(None, gt=0)
     max_position_size_percent: float | None = Field(None, gt=0, le=100)
     risk_percent_per_trade: float | None = Field(None, gt=0, le=100)
 
     # Portfolio Limits
     max_portfolio_heat: float | None = Field(None, gt=0, le=100)
     max_open_positions: int | None = Field(None, gt=0, le=20)
-    max_leverage: int | None = Field(None, gt=0, le=100)
+    leverage: int | None = Field(None, gt=0, le=125)
 
     # Drawdown Limits
-    max_daily_loss_usd: float | None = Field(None, gt=0)
     max_daily_loss_percent: float | None = Field(None, gt=0, le=100)
     max_weekly_loss_percent: float | None = Field(None, gt=0, le=100)
     max_monthly_loss_percent: float | None = Field(None, gt=0, le=100)

@@ -33,9 +33,6 @@ class RiskSettings(Base):
         nullable=False,
         default=PositionSizingMethod.FIXED_PERCENT,
     )
-    max_position_size_usd: Mapped[float] = mapped_column(
-        Numeric(12, 2), nullable=False, default=10000.0
-    )
     max_position_size_percent: Mapped[float] = mapped_column(
         Numeric(5, 2), nullable=False, default=10.0
     )
@@ -46,10 +43,9 @@ class RiskSettings(Base):
     # Portfolio Limits
     max_portfolio_heat: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False, default=50.0)
     max_open_positions: Mapped[int] = mapped_column(nullable=False, default=5)
-    max_leverage: Mapped[int] = mapped_column(nullable=False, default=10)
+    leverage: Mapped[int] = mapped_column(nullable=False, default=5)
 
     # Drawdown Limits
-    max_daily_loss_usd: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=500.0)
     max_daily_loss_percent: Mapped[float] = mapped_column(
         Numeric(5, 2), nullable=False, default=5.0
     )

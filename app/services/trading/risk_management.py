@@ -37,7 +37,6 @@ class RiskLimits:
     """User-defined risk limits"""
 
     # Position Sizing
-    max_position_size_usd: float = 10000.0
     max_position_size_percent: float = 10.0  # % of portfolio
     risk_percent_per_trade: float = 2.0  # % of equity risked per trade
     position_sizing_method: PositionSizingMethod = PositionSizingMethod.FIXED_PERCENT
@@ -45,10 +44,9 @@ class RiskLimits:
     # Portfolio Limits
     max_portfolio_heat: float = 50.0  # Max % of portfolio at risk
     max_open_positions: int = 5
-    max_leverage: int = 10
+    leverage: int = 5
 
     # Drawdown Limits
-    max_daily_loss_usd: float = 500.0
     max_daily_loss_percent: float = 5.0
     max_weekly_loss_percent: float = 10.0
     max_monthly_loss_percent: float = 20.0
@@ -120,7 +118,7 @@ class RiskManagementService:
             risk_settings = RiskSettings(
                 user_id=user_id,
                 min_risk_reward_ratio=app_settings.llm_min_risk_reward_ratio,
-                max_leverage=app_settings.max_leverage,
+                leverage=app_settings.default_leverage,
                 max_position_size_percent=app_settings.max_position_size_percent,
                 min_signal_confidence=app_settings.llm_min_confidence,
             )
@@ -137,7 +135,6 @@ class RiskManagementService:
 
         # User's risk settings are authoritative — return them directly
         return RiskLimits(
-            max_position_size_usd=float(risk_settings.max_position_size_usd),
             max_position_size_percent=float(risk_settings.max_position_size_percent),
             risk_percent_per_trade=float(risk_settings.risk_percent_per_trade),
             position_sizing_method=sizing_method_map.get(
@@ -145,8 +142,7 @@ class RiskManagementService:
             ),
             max_portfolio_heat=float(risk_settings.max_portfolio_heat),
             max_open_positions=risk_settings.max_open_positions,
-            max_leverage=risk_settings.max_leverage,
-            max_daily_loss_usd=float(risk_settings.max_daily_loss_usd),
+            leverage=risk_settings.leverage,
             max_daily_loss_percent=float(risk_settings.max_daily_loss_percent),
             max_weekly_loss_percent=float(risk_settings.max_weekly_loss_percent),
             max_monthly_loss_percent=float(risk_settings.max_monthly_loss_percent),
@@ -350,10 +346,7 @@ class RiskManagementService:
 
         # Calculate position size based on method
         if limits.position_sizing_method == PositionSizingMethod.FIXED_AMOUNT:
-            position_size_usd = min(
-                limits.max_position_size_usd,
-                metrics.total_equity * limits.max_position_size_percent / 100,
-            )
+            position_size_usd = metrics.total_equity * limits.max_position_size_percent / 100
 
         elif limits.position_sizing_method == PositionSizingMethod.FIXED_PERCENT:
             position_size_usd = metrics.total_equity * limits.max_position_size_percent / 100
@@ -377,10 +370,9 @@ class RiskManagementService:
             target_risk_percent = 1.0  # 1% risk per trade
             position_size_usd = (metrics.total_equity * target_risk_percent / 100) / risk_percent
 
-        # Apply hard limits
+        # Apply hard limits (percentage only)
         position_size_usd = min(
             position_size_usd,
-            limits.max_position_size_usd,
             metrics.total_equity * limits.max_position_size_percent / 100,
         )
 
@@ -447,9 +439,6 @@ class RiskManagementService:
                 daily_loss_usd / metrics.total_equity * 100 if metrics.total_equity > 0 else 0
             )
 
-            if daily_loss_usd >= limits.max_daily_loss_usd:
-                return False, f"Daily loss limit: ${daily_loss_usd:.2f}"
-
             if daily_loss_percent >= limits.max_daily_loss_percent:
                 return False, f"Daily loss %: {daily_loss_percent:.2f}%"
 
@@ -468,9 +457,6 @@ class RiskManagementService:
             return False, f"Consecutive losses: {metrics.consecutive_losses}"
 
         # 6. Check position size
-        if position_size_usd > limits.max_position_size_usd:
-            return False, f"Position too large: ${position_size_usd:.2f}"
-
         position_percent = (
             position_size_usd / metrics.total_equity * 100 if metrics.total_equity > 0 else 0
         )
@@ -526,8 +512,8 @@ class RiskManagementService:
                 0,
             )
 
-        # 2. Clamp leverage to user's max
-        clamped_leverage = max(1, min(proposed_leverage, limits.max_leverage))
+        # 2. Use user's leverage setting directly
+        clamped_leverage = max(1, limits.leverage)
 
         # 3. Risk-based position sizing
         # With leverage, PnL = position_size_usd * stop_distance_pct * leverage
@@ -541,20 +527,16 @@ class RiskManagementService:
         if stop_distance_pct > 0 and limits.risk_percent_per_trade > 0:
             max_loss = equity * (limits.risk_percent_per_trade / 100)
             risk_based_size = max_loss / (stop_distance_pct * clamped_leverage)
-            # Cap by user's max position size and available balance
-            clamped_size = min(
-                risk_based_size,
-                limits.max_position_size_usd,
-                equity * (limits.max_position_size_percent / 100),
-            )
+            # Cap by user's max position size percent
+            max_by_percent = equity * (limits.max_position_size_percent / 100)
+            clamped_size = min(risk_based_size, max_by_percent)
         else:
-            clamped_size = min(
-                position_size_usd,
-                limits.max_position_size_usd,
+            max_by_percent = (
                 equity * (limits.max_position_size_percent / 100)
                 if equity > 0
-                else position_size_usd,
+                else position_size_usd
             )
+            clamped_size = min(position_size_usd, max_by_percent)
 
         # Ensure position size is positive
         clamped_size = max(0, clamped_size)

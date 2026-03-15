@@ -518,11 +518,6 @@ CONFIGURABLE_SETTINGS: dict[str, dict[str, Any]] = {
         "description": "Default leverage for new trades",
         "type": "int",
     },
-    "max_leverage": {
-        "category": "trading",
-        "description": "Maximum allowed leverage",
-        "type": "int",
-    },
     "max_concurrent_positions": {
         "category": "trading",
         "description": "Max number of open positions per user",

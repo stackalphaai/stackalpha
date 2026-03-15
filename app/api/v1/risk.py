@@ -38,13 +38,11 @@ def _serialize_risk_settings(settings: RiskSettings) -> RiskSettingsResponse:
             if hasattr(settings.position_sizing_method, "value")
             else str(settings.position_sizing_method)
         ),
-        max_position_size_usd=float(settings.max_position_size_usd),
         max_position_size_percent=float(settings.max_position_size_percent),
         risk_percent_per_trade=float(settings.risk_percent_per_trade),
         max_portfolio_heat=float(settings.max_portfolio_heat),
         max_open_positions=settings.max_open_positions,
-        max_leverage=settings.max_leverage,
-        max_daily_loss_usd=float(settings.max_daily_loss_usd),
+        leverage=settings.leverage,
         max_daily_loss_percent=float(settings.max_daily_loss_percent),
         max_weekly_loss_percent=float(settings.max_weekly_loss_percent),
         max_monthly_loss_percent=float(settings.max_monthly_loss_percent),

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class RiskManager:
     def __init__(self):
         self.max_position_size_percent = settings.max_position_size_percent
-        self.max_leverage = settings.max_leverage
+        self.max_leverage = settings.default_leverage
         self.default_leverage = settings.default_leverage
         self.max_concurrent_positions = settings.max_concurrent_positions
 

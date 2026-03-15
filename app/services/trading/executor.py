@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.core.exceptions import (
     BadRequestError,
     HyperliquidAPIError,
@@ -53,7 +52,7 @@ class TradeExecutor:
 
         position_pct = position_size_percent or float(signal.suggested_position_size_percent)
         leverage_val = leverage or signal.suggested_leverage
-        leverage_val = max(1, min(leverage_val, settings.max_leverage))
+        leverage_val = max(1, leverage_val)
 
         position_size_usd = available_balance * (position_pct / 100)
 
@@ -159,9 +158,9 @@ class TradeExecutor:
         if not approved:
             raise RiskLimitError(f"Risk check failed: {reason}")
 
-        # Clamp leverage to user's max
+        # Use user's leverage setting
         limits = await risk_service.get_risk_limits(user.id)
-        leverage = max(1, min(leverage, limits.max_leverage))
+        leverage = max(1, limits.leverage)
 
         position_size = position_size_usd / current_price
 
