@@ -77,6 +77,10 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.tasks.trading.sync_binance_positions",
         "schedule": 60.0,
     },
+    "sync-wallet-balances-every-2-minutes": {
+        "task": "app.workers.tasks.maintenance.sync_wallet_balances",
+        "schedule": 120.0,
+    },
 }
 
 
