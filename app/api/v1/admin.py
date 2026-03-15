@@ -1078,6 +1078,132 @@ async def invalidate_signal(signal_id: str, current_user: AdminUser, db: DB) -> 
     return SuccessResponse(message="Signal invalidated")
 
 
+class AdminExecuteRequest(BaseModel):
+    user_email: str | None = None
+    user_id: str | None = None
+    leverage: int | None = None
+    position_size_percent: float | None = None
+
+
+@router.post("/signals/{signal_id}/execute-for-user")
+async def admin_execute_signal_for_user(
+    signal_id: str,
+    body: AdminExecuteRequest,
+    current_user: SuperAdminUser,
+    db: DB,
+) -> dict[str, Any]:
+    """Force-execute a signal for a specific user. Bypasses risk checks."""
+    from app.models.exchange_connection import (
+        ExchangeConnection,
+        ExchangeConnectionStatus,
+        ExchangeType,
+    )
+    from app.services.trading.binance_executor import BinanceTradeExecutor
+    from app.services.trading.executor import TradeExecutor
+
+    # Find signal
+    result = await db.execute(select(Signal).where(Signal.id == signal_id))
+    signal = result.scalar_one_or_none()
+    if not signal:
+        from app.core.exceptions import NotFoundError
+
+        raise NotFoundError("Signal")
+
+    # Find user
+    if body.user_email:
+        result = await db.execute(
+            select(User)
+            .options(
+                selectinload(User.exchange_connections),
+                selectinload(User.wallets),
+                selectinload(User.telegram_connection),
+            )
+            .where(User.email == body.user_email)
+        )
+    elif body.user_id:
+        result = await db.execute(
+            select(User)
+            .options(
+                selectinload(User.exchange_connections),
+                selectinload(User.wallets),
+                selectinload(User.telegram_connection),
+            )
+            .where(User.id == body.user_id)
+        )
+    else:
+        from app.core.exceptions import ValidationError
+
+        raise ValidationError("Provide user_email or user_id")
+
+    user = result.scalar_one_or_none()
+    if not user:
+        from app.core.exceptions import NotFoundError
+
+        raise NotFoundError("User")
+
+    # Execute based on exchange
+    if signal.exchange == "binance":
+        connection = next(
+            (
+                c
+                for c in user.exchange_connections
+                if c.exchange_type == ExchangeType.BINANCE
+                and c.status == ExchangeConnectionStatus.ACTIVE
+                and not c.is_testnet
+            ),
+            None,
+        )
+        if not connection:
+            return {
+                "status": "error",
+                "message": f"User {user.email} has no active Binance connection",
+            }
+
+        executor = BinanceTradeExecutor(db)
+        trade = await executor.execute_signal(
+            user=user,
+            exchange_connection=connection,
+            signal=signal,
+            leverage=body.leverage,
+            position_size_percent=body.position_size_percent,
+        )
+    else:
+        wallet = next(
+            (w for w in user.wallets if w.is_trading_enabled),
+            None,
+        )
+        if not wallet:
+            return {
+                "status": "error",
+                "message": f"User {user.email} has no trading-enabled wallet",
+            }
+
+        executor = TradeExecutor(db)
+        trade = await executor.execute_signal(
+            user=user,
+            wallet=wallet,
+            signal=signal,
+            leverage=body.leverage,
+            position_size_percent=body.position_size_percent,
+        )
+
+    await db.commit()
+
+    logger.info(
+        f"Admin {current_user.email} force-executed signal {signal_id} "
+        f"for user {user.email}: trade {trade.id} status={trade.status.value}"
+    )
+
+    return {
+        "status": "success",
+        "trade_id": trade.id,
+        "trade_status": trade.status.value,
+        "symbol": signal.symbol,
+        "direction": signal.direction.value,
+        "user_email": user.email,
+    }
+
+
 # ============================================================================
 # Trades Management
 # ============================================================================
