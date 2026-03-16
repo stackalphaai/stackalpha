@@ -71,7 +71,7 @@ class HyperliquidClient:
             self._client = None  # Reset so retry gets a fresh connection
             raise HyperliquidAPIError(f"Request failed: {str(e)}") from e
         except Exception as e:
-            logger.error(f"Unexpected error in Hyperliquid client: {str(e)}")
+            logger.debug(f"Hyperliquid client reset (stale connection): {e}")
             self._client = None  # Reset stale client (e.g. event loop closed)
             raise HyperliquidAPIError(f"Unexpected error: {str(e)}") from e
 
