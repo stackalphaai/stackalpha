@@ -27,6 +27,14 @@ class RiskSettings(Base):
         Numeric(5, 2), nullable=False, default=2.0
     )
 
+    # Legacy columns — kept for backward compat until migration drops them
+    position_sizing_method: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, default="fixed_percent", server_default="fixed_percent"
+    )
+    max_position_size_percent: Mapped[float | None] = mapped_column(
+        Numeric(5, 2), nullable=True, default=10.0, server_default="10.0"
+    )
+
     # Portfolio Limits
     max_portfolio_heat: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False, default=50.0)
     max_open_positions: Mapped[int] = mapped_column(nullable=False, default=5)
