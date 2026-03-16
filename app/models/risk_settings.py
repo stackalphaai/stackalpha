@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Numeric, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -29,7 +29,9 @@ class RiskSettings(Base):
 
     # Legacy columns — kept for backward compat until migration drops them
     position_sizing_method: Mapped[str | None] = mapped_column(
-        String(20), nullable=True, default="fixed_percent", server_default="fixed_percent"
+        Enum("fixed_amount", "fixed_percent", "kelly", "risk_parity", name="positionsizingmethod"),
+        nullable=True,
+        default="fixed_percent",
     )
     max_position_size_percent: Mapped[float | None] = mapped_column(
         Numeric(5, 2), nullable=True, default=10.0, server_default="10.0"
