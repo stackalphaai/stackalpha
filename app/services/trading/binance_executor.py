@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.core.exceptions import (
     BadRequestError,
     BinanceAPIError,
@@ -51,14 +50,7 @@ class BinanceTradeExecutor:
             if available_balance <= 0:
                 raise InsufficientBalanceError()
 
-            # Calculate position size
-            position_pct = position_size_percent or float(signal.suggested_position_size_percent)
-            leverage_val = leverage or signal.suggested_leverage
-            leverage_val = max(1, min(leverage_val, settings.binance_max_leverage))
-
-            position_size_usd = available_balance * (position_pct / 100)
-
-            # --- Risk Management Validation ---
+            # Risk management determines margin and leverage from user's settings
             risk_service = RiskManagementService(self.db)
             (
                 approved,
@@ -68,11 +60,11 @@ class BinanceTradeExecutor:
             ) = await risk_service.validate_signal_execution(
                 user_id=user.id,
                 signal_confidence=float(signal.confidence_score),
-                proposed_leverage=leverage_val,
+                proposed_leverage=leverage or signal.suggested_leverage,
                 entry_price=float(signal.entry_price),
                 stop_loss_price=float(signal.stop_loss_price),
                 take_profit_price=float(signal.take_profit_price),
-                position_size_usd=position_size_usd,
+                position_size_usd=available_balance,
                 available_balance=available_balance,
             )
             if not approved:

@@ -363,15 +363,13 @@ class RiskManagementService:
         available_balance: float = 0,
     ) -> tuple[bool, str | None, int, float]:
         """
-        Full pre-trade validation combining signal confidence, risk limits,
-        leverage clamping, and risk-based position sizing.
+        Full pre-trade validation.
 
-        Uses risk_percent_per_trade to calculate position size based on
-        stop loss distance: if SL is hit, you lose exactly risk_percent_per_trade%
-        of equity.
+        Position size = available_balance * margin_per_trade_percent / 100.
+        Leverage comes from user's risk settings directly.
 
         Returns:
-            (approved, rejection_reason, clamped_leverage, clamped_position_size_usd)
+            (approved, rejection_reason, leverage, margin_usd)
         """
         limits = await self.get_risk_limits(user_id)
 

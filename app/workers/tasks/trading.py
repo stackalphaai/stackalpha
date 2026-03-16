@@ -251,10 +251,11 @@ async def _auto_execute_hyperliquid_signal(signal_id: str):
                 selectinload(User.telegram_connection),
             )
             .where(
+                User.is_active.is_(True),
+                User.is_subscribed.is_(True),
                 Wallet.status == WalletStatus.ACTIVE,
                 Wallet.is_authorized.is_(True),
                 Wallet.is_trading_enabled.is_(True),
-                User.is_subscribed.is_(True),
             )
             .distinct()
         )
@@ -366,11 +367,12 @@ async def _auto_execute_binance_signal(signal_id: str):
                 selectinload(User.telegram_connection),
             )
             .where(
+                User.is_active.is_(True),
+                User.is_subscribed.is_(True),
                 ExchangeConnection.exchange_type == ExchangeType.BINANCE,
                 ExchangeConnection.is_testnet.is_(False),
                 ExchangeConnection.status == ExchangeConnectionStatus.ACTIVE,
                 ExchangeConnection.is_trading_enabled.is_(True),
-                User.is_subscribed.is_(True),
             )
             .distinct()
         )
