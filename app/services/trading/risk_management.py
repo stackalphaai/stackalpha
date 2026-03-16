@@ -388,6 +388,10 @@ class RiskManagementService:
 
         # 3. Position sizing — margin = balance * margin_per_trade_percent / 100
         equity = available_balance if available_balance > 0 else position_size_usd
+        logger.info(
+            f"Position sizing for user {user_id}: equity=${equity:.2f}, "
+            f"margin_pct={limits.margin_per_trade_percent}%, leverage={clamped_leverage}x"
+        )
         clamped_size = equity * (limits.margin_per_trade_percent / 100)
 
         # Ensure position size is positive
