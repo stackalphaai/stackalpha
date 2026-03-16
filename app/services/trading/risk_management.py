@@ -14,7 +14,6 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
-from enum import Enum
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,22 +24,13 @@ from app.models.risk_settings import RiskSettings
 logger = logging.getLogger(__name__)
 
 
-class PositionSizingMethod(str, Enum):
-    FIXED_AMOUNT = "fixed_amount"  # Fixed dollar amount per trade
-    FIXED_PERCENT = "fixed_percent"  # Fixed % of portfolio per trade
-    KELLY_CRITERION = "kelly"  # Kelly Criterion (optimal growth)
-    RISK_PARITY = "risk_parity"  # Risk-adjusted sizing
-
-
 @dataclass
 class RiskLimits:
     """User-defined risk limits"""
 
-    # Position Sizing
+    # Position Sizing — margin% + leverage determines position size
     margin_per_trade_percent: float = 10.0  # % of balance used as margin per trade
-    max_position_size_percent: float = 10.0  # % of portfolio
-    risk_percent_per_trade: float = 2.0  # % of equity risked per trade
-    position_sizing_method: PositionSizingMethod = PositionSizingMethod.FIXED_PERCENT
+    risk_percent_per_trade: float = 2.0  # max % loss per trade (determines stop loss)
 
     # Portfolio Limits
     max_portfolio_heat: float = 50.0  # Max % of portfolio at risk
@@ -120,28 +110,16 @@ class RiskManagementService:
                 user_id=user_id,
                 min_risk_reward_ratio=app_settings.llm_min_risk_reward_ratio,
                 leverage=app_settings.default_leverage,
-                max_position_size_percent=app_settings.max_position_size_percent,
                 min_signal_confidence=app_settings.llm_min_confidence,
             )
             self.db.add(risk_settings)
             await self.db.flush()
 
         # Map the DB PositionSizingMethod string to our local enum
-        sizing_method_map = {
-            "fixed_amount": PositionSizingMethod.FIXED_AMOUNT,
-            "fixed_percent": PositionSizingMethod.FIXED_PERCENT,
-            "kelly": PositionSizingMethod.KELLY_CRITERION,
-            "risk_parity": PositionSizingMethod.RISK_PARITY,
-        }
-
         # User's risk settings are authoritative — return them directly
         return RiskLimits(
             margin_per_trade_percent=float(risk_settings.margin_per_trade_percent),
-            max_position_size_percent=float(risk_settings.max_position_size_percent),
             risk_percent_per_trade=float(risk_settings.risk_percent_per_trade),
-            position_sizing_method=sizing_method_map.get(
-                risk_settings.position_sizing_method, PositionSizingMethod.FIXED_PERCENT
-            ),
             max_portfolio_heat=float(risk_settings.max_portfolio_heat),
             max_open_positions=risk_settings.max_open_positions,
             leverage=risk_settings.leverage,
@@ -270,135 +248,35 @@ class RiskManagementService:
         signal_confidence: float = 0.7,
     ) -> PositionSizingResult:
         """
-        Calculate optimal position size using configured method.
+        Calculate position size using margin_per_trade_percent.
 
-        Args:
-            user_id: User ID
-            symbol: Trading symbol
-            entry_price: Intended entry price
-            stop_loss_price: Stop loss price
-            signal_confidence: AI signal confidence (0-1)
-
-        Returns:
-            PositionSizingResult with size and approval status
+        margin = equity * margin_per_trade_percent / 100
         """
         limits = await self.get_risk_limits(user_id)
         metrics = await self.get_portfolio_metrics(user_id)
 
-        # Check circuit breakers first
         if limits.trading_paused:
             return PositionSizingResult(
                 position_size_usd=0,
                 position_size_percent=0,
                 risk_amount=0,
                 approved=False,
-                rejection_reason="Trading is paused by circuit breaker",
+                rejection_reason="Trading is paused",
             )
 
-        # Check consecutive losses
-        if metrics.consecutive_losses >= limits.max_consecutive_losses:
-            return PositionSizingResult(
-                position_size_usd=0,
-                position_size_percent=0,
-                risk_amount=0,
-                approved=False,
-                rejection_reason=f"Circuit breaker: {metrics.consecutive_losses} consecutive losses",
-            )
-
-        # Check daily loss limit
-        daily_loss_percent = (
-            abs(metrics.daily_pnl) / metrics.total_equity * 100
-            if metrics.total_equity > 0 and metrics.daily_pnl < 0
-            else 0
-        )
-        if daily_loss_percent >= limits.max_daily_loss_percent:
-            return PositionSizingResult(
-                position_size_usd=0,
-                position_size_percent=0,
-                risk_amount=0,
-                approved=False,
-                rejection_reason=f"Daily loss limit reached: {daily_loss_percent:.2f}%",
-            )
-
-        # Check position count limit
         if metrics.open_positions_count >= limits.max_open_positions:
             return PositionSizingResult(
                 position_size_usd=0,
                 position_size_percent=0,
                 risk_amount=0,
                 approved=False,
-                rejection_reason=f"Max open positions reached: {limits.max_open_positions}",
+                rejection_reason=f"Max open positions: {limits.max_open_positions}",
             )
 
-        # Calculate risk per trade (distance from entry to stop loss)
+        position_size_usd = metrics.total_equity * (limits.margin_per_trade_percent / 100)
+        position_size_percent = limits.margin_per_trade_percent
         risk_per_share = abs(entry_price - stop_loss_price)
-        risk_percent = risk_per_share / entry_price
-
-        # Check risk-reward ratio
-        # Assuming take profit is at 1.5x the risk (can be parameterized)
-        risk_reward_ratio = 1.5  # TODO: Get from signal data
-        if risk_reward_ratio < limits.min_risk_reward_ratio:
-            return PositionSizingResult(
-                position_size_usd=0,
-                position_size_percent=0,
-                risk_amount=0,
-                approved=False,
-                rejection_reason=f"Risk-reward ratio too low: {risk_reward_ratio:.2f}",
-            )
-
-        # Calculate position size based on method
-        if limits.position_sizing_method == PositionSizingMethod.FIXED_AMOUNT:
-            position_size_usd = metrics.total_equity * limits.max_position_size_percent / 100
-
-        elif limits.position_sizing_method == PositionSizingMethod.FIXED_PERCENT:
-            position_size_usd = metrics.total_equity * limits.max_position_size_percent / 100
-
-        elif limits.position_sizing_method == PositionSizingMethod.KELLY_CRITERION:
-            # Kelly = (Win% * Avg Win - Loss% * Avg Loss) / Avg Win
-            # Simplified: use signal confidence as win probability
-            win_prob = signal_confidence
-            loss_prob = 1 - win_prob
-            avg_win = risk_reward_ratio
-            avg_loss = 1
-
-            kelly_fraction = (win_prob * avg_win - loss_prob * avg_loss) / avg_win
-            kelly_fraction = max(0, min(kelly_fraction, 0.25))  # Cap at 25%
-
-            position_size_usd = metrics.total_equity * kelly_fraction
-
-        else:  # RISK_PARITY
-            # Size based on volatility (inversely proportional to risk)
-            # Higher risk = smaller position
-            target_risk_percent = 1.0  # 1% risk per trade
-            position_size_usd = (metrics.total_equity * target_risk_percent / 100) / risk_percent
-
-        # Apply hard limits (percentage only)
-        position_size_usd = min(
-            position_size_usd,
-            metrics.total_equity * limits.max_position_size_percent / 100,
-        )
-
-        position_size_percent = (
-            position_size_usd / metrics.total_equity * 100 if metrics.total_equity > 0 else 0
-        )
-
-        # Calculate risk amount
-        risk_amount = position_size_usd * risk_percent
-
-        # Check if adding this position exceeds portfolio heat
-        new_portfolio_heat = (
-            metrics.portfolio_heat + (risk_amount / metrics.total_equity * 100)
-            if metrics.total_equity > 0
-            else 0
-        )
-        if new_portfolio_heat > limits.max_portfolio_heat:
-            return PositionSizingResult(
-                position_size_usd=0,
-                position_size_percent=0,
-                risk_amount=0,
-                approved=False,
-                rejection_reason=f"Portfolio heat limit exceeded: {new_portfolio_heat:.2f}%",
-            )
+        risk_amount = position_size_usd * (risk_per_share / entry_price) if entry_price > 0 else 0
 
         return PositionSizingResult(
             position_size_usd=position_size_usd,
@@ -458,14 +336,7 @@ class RiskManagementService:
         if metrics.consecutive_losses >= limits.max_consecutive_losses:
             return False, f"Consecutive losses: {metrics.consecutive_losses}"
 
-        # 6. Check position size
-        position_percent = (
-            position_size_usd / metrics.total_equity * 100 if metrics.total_equity > 0 else 0
-        )
-        if position_percent > limits.max_position_size_percent:
-            return False, f"Position % too large: {position_percent:.2f}%"
-
-        # 7. Validate stop loss exists
+        # 6. Validate stop loss exists
         if not stop_loss_price:
             return False, "Stop loss is required"
 
@@ -520,10 +391,6 @@ class RiskManagementService:
         # 3. Position sizing — margin = balance * margin_per_trade_percent / 100
         equity = available_balance if available_balance > 0 else position_size_usd
         clamped_size = equity * (limits.margin_per_trade_percent / 100)
-
-        # Also cap by max_position_size_percent
-        max_by_percent = equity * (limits.max_position_size_percent / 100)
-        clamped_size = min(clamped_size, max_by_percent)
 
         # Ensure position size is positive
         clamped_size = max(0, clamped_size)

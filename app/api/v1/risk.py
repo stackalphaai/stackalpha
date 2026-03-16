@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import CurrentUser
-from app.models.risk_settings import PositionSizingMethod, RiskSettings
+from app.models.risk_settings import RiskSettings
 from app.schemas.risk import (
     CircuitBreakerStatusResponse,
     PauseTradingRequest,
@@ -33,13 +33,7 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 def _serialize_risk_settings(settings: RiskSettings) -> RiskSettingsResponse:
     """Explicitly serialize RiskSettings ORM object to response schema."""
     return RiskSettingsResponse(
-        position_sizing_method=(
-            settings.position_sizing_method.value
-            if hasattr(settings.position_sizing_method, "value")
-            else str(settings.position_sizing_method)
-        ),
         margin_per_trade_percent=float(settings.margin_per_trade_percent),
-        max_position_size_percent=float(settings.max_position_size_percent),
         risk_percent_per_trade=float(settings.risk_percent_per_trade),
         max_portfolio_heat=float(settings.max_portfolio_heat),
         max_open_positions=settings.max_open_positions,
@@ -74,7 +68,6 @@ async def get_risk_settings(
         settings = RiskSettings(
             id=str(uuid4()),
             user_id=current_user.id,
-            position_sizing_method=PositionSizingMethod.FIXED_PERCENT,
         )
         db.add(settings)
         await db.commit()

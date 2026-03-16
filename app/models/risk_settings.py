@@ -2,19 +2,11 @@
 
 import uuid
 from datetime import datetime
-from enum import Enum as PyEnum
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Numeric, String, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-
-
-class PositionSizingMethod(str, PyEnum):
-    FIXED_AMOUNT = "fixed_amount"
-    FIXED_PERCENT = "fixed_percent"
-    KELLY_CRITERION = "kelly"
-    RISK_PARITY = "risk_parity"
 
 
 class RiskSettings(Base):
@@ -28,15 +20,7 @@ class RiskSettings(Base):
     )
 
     # Position Sizing
-    position_sizing_method: Mapped[str] = mapped_column(
-        Enum(PositionSizingMethod, values_callable=lambda x: [e.value for e in x]),
-        nullable=False,
-        default=PositionSizingMethod.FIXED_PERCENT,
-    )
     margin_per_trade_percent: Mapped[float] = mapped_column(
-        Numeric(5, 2), nullable=False, default=10.0
-    )
-    max_position_size_percent: Mapped[float] = mapped_column(
         Numeric(5, 2), nullable=False, default=10.0
     )
     risk_percent_per_trade: Mapped[float] = mapped_column(

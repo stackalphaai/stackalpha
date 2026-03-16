@@ -7,9 +7,7 @@ from app.schemas.common import BaseSchema
 
 class RiskSettingsResponse(BaseSchema):
     # Position Sizing
-    position_sizing_method: str
     margin_per_trade_percent: float
-    max_position_size_percent: float
     risk_percent_per_trade: float = 2.0
 
     # Portfolio Limits
@@ -43,9 +41,7 @@ class RiskSettingsResponse(BaseSchema):
 
 class UpdateRiskSettingsRequest(BaseModel):
     # Position Sizing
-    position_sizing_method: str | None = None
     margin_per_trade_percent: float | None = Field(None, gt=0, le=100)
-    max_position_size_percent: float | None = Field(None, gt=0, le=100)
     risk_percent_per_trade: float | None = Field(None, gt=0, le=100)
 
     # Portfolio Limits

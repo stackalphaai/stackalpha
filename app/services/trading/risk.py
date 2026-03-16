@@ -9,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 class RiskManager:
     def __init__(self):
-        self.max_position_size_percent = settings.max_position_size_percent
         self.max_leverage = settings.default_leverage
         self.default_leverage = settings.default_leverage
         self.max_concurrent_positions = settings.max_concurrent_positions
@@ -21,7 +20,6 @@ class RiskManager:
         risk_percent: float | None = None,
     ) -> dict[str, float]:
         risk_pct = risk_percent or signal.suggested_position_size_percent
-        risk_pct = min(risk_pct, self.max_position_size_percent)
 
         position_size_usd = available_balance * (risk_pct / 100)
 

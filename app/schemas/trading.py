@@ -130,12 +130,10 @@ class CandleResponse(BaseSchema):
 
 
 class TradingSettingsRequest(BaseModel):
-    max_position_size_percent: float | None = Field(None, gt=0, le=100)
     default_leverage: int | None = Field(None, ge=1, le=125)
     auto_trade_signals: bool | None = None
 
 
 class TradingSettingsResponse(BaseSchema):
-    max_position_size_percent: float
     default_leverage: int
     auto_trade_signals: bool

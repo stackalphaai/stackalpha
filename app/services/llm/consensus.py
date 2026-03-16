@@ -348,7 +348,7 @@ class ConsensusEngine:
         confidence: float,
         volatility_ratio: float,
     ) -> float:
-        base_size = settings.max_position_size_percent
+        base_size = 10.0  # Suggested %, user's margin_per_trade_percent overrides
 
         confidence_factor = 0.5 + (confidence * 0.5)
 

@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Trade, TradeStatus
-from app.models.risk_settings import PositionSizingMethod, RiskSettings
+from app.models.risk_settings import RiskSettings
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,6 @@ class CircuitBreakerService:
             settings = RiskSettings(
                 id=str(uuid4()),
                 user_id=user_id,
-                position_sizing_method=PositionSizingMethod.FIXED_PERCENT,
             )
             self.db.add(settings)
             await self.db.commit()

@@ -104,7 +104,6 @@ class Settings(BaseSettings):
     binance_top_movers_limit: int = 15
 
     # Trading
-    max_position_size_percent: float = 10.0
     default_leverage: int = 5
     analysis_interval_hours: int = 4
     max_concurrent_positions: int = 5

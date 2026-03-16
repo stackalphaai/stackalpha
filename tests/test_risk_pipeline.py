@@ -107,22 +107,21 @@ def test_rr_ratio_from_signal():
     assert rr3 >= min_rr  # Should pass
 
 
-def test_max_position_size_cap():
-    """Verify position is capped by max_position_size_percent (no dollar cap)."""
+def test_margin_determines_position_size():
+    """Margin% directly determines position size, no other caps."""
     equity = 10000.0
-    risk_percent = 2.0
-    stop_distance_pct = 0.005  # 0.5% tight SL
+    margin_per_trade_percent = 10.0
     leverage = 20
-    max_position_size_percent = 10.0
+    current_price = 50.0
 
-    max_loss = equity * (risk_percent / 100)  # $200
-    risk_based_size = max_loss / (stop_distance_pct * leverage)  # $200 / 0.1 = $2000
+    margin = equity * (margin_per_trade_percent / 100)  # $1000
+    assert margin == 1000.0
 
-    # Cap by percentage only
-    max_by_percent = equity * (max_position_size_percent / 100)  # $1000
-    clamped = min(risk_based_size, max_by_percent)
-    assert clamped == min(2000.0, 1000.0)
-    assert clamped == 1000.0  # Capped by 10% of equity
+    notional = margin * leverage  # $20,000
+    assert notional == 20000.0
+
+    quantity = notional / current_price  # 400 tokens
+    assert quantity == 400.0
 
 
 def test_margin_per_trade_percent():
@@ -143,16 +142,25 @@ def test_margin_per_trade_percent():
     assert round(quantity, 2) == 34.48
 
 
-def test_margin_percent_capped_by_max_position():
-    """Margin is capped by max_position_size_percent if it's lower."""
-    margin_per_trade_percent = 20.0
-    max_position_size_percent = 10.0
-    equity = 1000.0
+def test_risk_per_trade_determines_stop_loss():
+    """risk_percent_per_trade determines max loss, which sets stop loss distance."""
+    margin = 100.0
+    leverage = 10
+    risk_percent_per_trade = 2.0
+    entry_price = 50.0
 
-    margin = equity * (margin_per_trade_percent / 100)  # $200
-    max_by_pct = equity * (max_position_size_percent / 100)  # $100
-    clamped = min(margin, max_by_pct)
-    assert clamped == 100.0  # Capped by max_position_size_percent
+    notional = margin * leverage  # $1000
+    # Max loss = margin * risk%  = $100 * 2% = $2
+    max_loss = margin * (risk_percent_per_trade / 100)
+    assert max_loss == 2.0
+
+    # Stop distance = max_loss / notional = $2 / $1000 = 0.2%
+    stop_distance_pct = max_loss / notional
+    assert stop_distance_pct == 0.002
+
+    # Stop loss price (long) = entry * (1 - stop_distance_pct)
+    sl_price = entry_price * (1 - stop_distance_pct)
+    assert sl_price == 49.9
 
 
 if __name__ == "__main__":
@@ -160,7 +168,7 @@ if __name__ == "__main__":
     test_position_sizing_with_different_params()
     test_quantity_calculation()
     test_rr_ratio_from_signal()
-    test_max_position_size_cap()
+    test_margin_determines_position_size()
     test_margin_per_trade_percent()
-    test_margin_percent_capped_by_max_position()
+    test_risk_per_trade_determines_stop_loss()
     print("All tests passed!")

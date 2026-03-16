@@ -508,11 +508,6 @@ CONFIGURABLE_SETTINGS: dict[str, dict[str, Any]] = {
         "type": "float",
     },
     # Trading
-    "max_position_size_percent": {
-        "category": "trading",
-        "description": "Max position size as % of portfolio",
-        "type": "float",
-    },
     "default_leverage": {
         "category": "trading",
         "description": "Default leverage for new trades",
