@@ -20,9 +20,37 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.alter_column("risk_settings", "max_leverage", new_column_name="leverage")
-    op.drop_column("risk_settings", "max_position_size_usd")
-    op.drop_column("risk_settings", "max_daily_loss_usd")
+    conn = op.get_bind()
+
+    # Rename max_leverage → leverage (if max_leverage still exists)
+    result = conn.execute(
+        sa.text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name='risk_settings' AND column_name='max_leverage'"
+        )
+    )
+    if result.fetchone():
+        op.alter_column("risk_settings", "max_leverage", new_column_name="leverage")
+
+    # Drop max_position_size_usd if exists
+    result = conn.execute(
+        sa.text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name='risk_settings' AND column_name='max_position_size_usd'"
+        )
+    )
+    if result.fetchone():
+        op.drop_column("risk_settings", "max_position_size_usd")
+
+    # Drop max_daily_loss_usd if exists
+    result = conn.execute(
+        sa.text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name='risk_settings' AND column_name='max_daily_loss_usd'"
+        )
+    )
+    if result.fetchone():
+        op.drop_column("risk_settings", "max_daily_loss_usd")
 
 
 def downgrade() -> None:

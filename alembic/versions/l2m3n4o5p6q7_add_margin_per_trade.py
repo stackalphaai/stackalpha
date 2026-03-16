@@ -20,17 +20,55 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "risk_settings",
-        sa.Column(
-            "margin_per_trade_percent",
-            sa.Numeric(5, 2),
-            nullable=False,
-            server_default="10.0",
-        ),
+    conn = op.get_bind()
+
+    # Add margin_per_trade_percent if not exists
+    result = conn.execute(
+        sa.text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name='risk_settings' AND column_name='margin_per_trade_percent'"
+        )
     )
-    op.drop_column("risk_settings", "position_sizing_method")
-    op.drop_column("risk_settings", "max_position_size_percent")
+    if not result.fetchone():
+        op.add_column(
+            "risk_settings",
+            sa.Column(
+                "margin_per_trade_percent",
+                sa.Numeric(5, 2),
+                nullable=False,
+                server_default="10.0",
+            ),
+        )
+
+    # Drop position_sizing_method if exists
+    result = conn.execute(
+        sa.text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name='risk_settings' AND column_name='position_sizing_method'"
+        )
+    )
+    if result.fetchone():
+        op.drop_column("risk_settings", "position_sizing_method")
+
+    # Drop max_position_size_percent if exists
+    result = conn.execute(
+        sa.text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name='risk_settings' AND column_name='max_position_size_percent'"
+        )
+    )
+    if result.fetchone():
+        op.drop_column("risk_settings", "max_position_size_percent")
+
+    # Drop margin_per_trade (old nullable dollar column) if exists
+    result = conn.execute(
+        sa.text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name='risk_settings' AND column_name='margin_per_trade'"
+        )
+    )
+    if result.fetchone():
+        op.drop_column("risk_settings", "margin_per_trade")
 
 
 def downgrade() -> None:

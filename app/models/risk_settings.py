@@ -21,7 +21,7 @@ class RiskSettings(Base):
 
     # Position Sizing
     margin_per_trade_percent: Mapped[float] = mapped_column(
-        Numeric(5, 2), nullable=False, default=10.0
+        Numeric(5, 2), nullable=False, default=10.0, server_default="10.0"
     )
     risk_percent_per_trade: Mapped[float] = mapped_column(
         Numeric(5, 2), nullable=False, default=2.0
