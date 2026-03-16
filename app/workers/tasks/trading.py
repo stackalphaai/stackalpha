@@ -370,7 +370,6 @@ async def _auto_execute_binance_signal(signal_id: str):
                 User.is_active.is_(True),
                 User.is_subscribed.is_(True),
                 ExchangeConnection.exchange_type == ExchangeType.BINANCE,
-                ExchangeConnection.is_testnet.is_(False),
                 ExchangeConnection.status == ExchangeConnectionStatus.ACTIVE,
                 ExchangeConnection.is_trading_enabled.is_(True),
             )
@@ -396,7 +395,6 @@ async def _auto_execute_binance_signal(signal_id: str):
                     if c.can_trade
                     and c.status == ExchangeConnectionStatus.ACTIVE
                     and c.exchange_type == ExchangeType.BINANCE
-                    and not c.is_testnet
                 ),
                 None,
             )

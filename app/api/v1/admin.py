@@ -1191,7 +1191,6 @@ async def admin_execute_signal_for_user(
                 for c in user.exchange_connections
                 if c.exchange_type == ExchangeType.BINANCE
                 and c.status == ExchangeConnectionStatus.ACTIVE
-                and not c.is_testnet
             ),
             None,
         )
@@ -1284,7 +1283,6 @@ async def admin_execute_signal_for_eligible_users(
             )
             .where(
                 ExchangeConnection.exchange_type == ExchangeType.BINANCE,
-                ExchangeConnection.is_testnet.is_(False),
                 ExchangeConnection.status == ExchangeConnectionStatus.ACTIVE,
                 ExchangeConnection.is_trading_enabled.is_(True),
                 User.is_subscribed.is_(True),
@@ -1304,7 +1302,6 @@ async def admin_execute_signal_for_eligible_users(
                     if c.can_trade
                     and c.status == ExchangeConnectionStatus.ACTIVE
                     and c.exchange_type == ExchangeType.BINANCE
-                    and not c.is_testnet
                 ),
                 None,
             )
