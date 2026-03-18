@@ -536,6 +536,25 @@ async def _monitor_binance_tpsl():
                         # Both gone — position closed externally
                         close_reason = TradeCloseReason.SYSTEM
                     # else: both still active, nothing to do
+                else:
+                    # No algo order IDs stored (e.g. Binance returned null orderId).
+                    # TP/SL orders still work on Binance via closePosition=true, but we
+                    # can't track them by ID. Fall back to checking if the actual
+                    # position still exists on the exchange.
+                    try:
+                        binance_exchange_check = await create_binance_exchange_service(
+                            trade.exchange_connection
+                        )
+                        try:
+                            open_positions = await binance_exchange_check.get_positions()
+                        finally:
+                            await binance_exchange_check.close()
+                        open_symbols = {p["symbol"] for p in open_positions}
+                        if binance_symbol not in open_symbols:
+                            # Position is gone — closed by TP/SL or externally
+                            close_reason = TradeCloseReason.SYSTEM
+                    except Exception as e:
+                        logger.warning(f"Could not check position for trade {trade.id}: {e}")
 
                 if close_reason:
                     # Cancel the remaining order

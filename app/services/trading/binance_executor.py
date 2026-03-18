@@ -78,13 +78,17 @@ class BinanceTradeExecutor:
             market_data = await self.info_service.get_market_data(binance_symbol)
             current_price = market_data.get("mark_price", float(signal.entry_price))
 
-            # Calculate quantity: position_size_usd is margin, notional = margin * leverage
-            notional_usd = position_size_usd * leverage_val
-            raw_qty = notional_usd / current_price
-            # Clamp to exchange max quantity to avoid -4005 errors
-            if "max_qty" in precision and precision["max_qty"] > 0:
-                raw_qty = min(raw_qty, precision["max_qty"])
-            position_size = round(raw_qty, precision["quantity_precision"])
+            # Calculate base quantity from full margin
+            max_qty = precision.get("max_qty", 0)
+
+            def _calc_qty(margin: float) -> tuple[float, float]:
+                notional = margin * leverage_val
+                raw = notional / current_price
+                if max_qty > 0:
+                    raw = min(raw, max_qty)
+                return round(raw, precision["quantity_precision"]), notional
+
+            position_size, notional_usd = _calc_qty(position_size_usd)
 
             # Create trade record
             trade = Trade(
@@ -105,12 +109,36 @@ class BinanceTradeExecutor:
             self.db.add(trade)
             await self.db.flush()
 
-            try:
-                trade = await self._open_binance_position(trade, binance_exchange, precision)
-            except Exception as e:
+            # Try opening with full margin, then ½, then ¼ on -4005
+            open_error: Exception | None = None
+            for margin_factor in [1.0, 0.5, 0.25]:
+                adjusted_margin = position_size_usd * margin_factor
+                adj_qty, adj_notional = _calc_qty(adjusted_margin)
+                trade.position_size = adj_qty
+                trade.position_size_usd = adj_notional
+                trade.margin_used = adjusted_margin
+                trade.status = TradeStatus.PENDING
+                if margin_factor < 1.0:
+                    logger.warning(
+                        f"Retrying {signal.symbol} with {int(margin_factor * 100)}% margin "
+                        f"(qty={adj_qty}) after -4005"
+                    )
+                try:
+                    trade = await self._open_binance_position(trade, binance_exchange, precision)
+                    open_error = None
+                    break
+                except Exception as e:
+                    open_error = e
+                    if "-4005" in str(e) and margin_factor < 1.0:
+                        continue
+                    if "-4005" in str(e):
+                        continue  # will retry at next factor
+                    break  # non -4005 error, stop retrying
+
+            if open_error:
                 trade.status = TradeStatus.FAILED
-                trade.error_message = str(e)
-                logger.error(f"Failed to execute Binance trade: {e}")
+                trade.error_message = str(open_error)
+                logger.error(f"Failed to execute Binance trade: {open_error}")
 
             return trade
         finally:
