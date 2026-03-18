@@ -5,6 +5,11 @@ from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
+
+class _TaskDisabledError(Exception):
+    """Raised when a task is disabled via admin config."""
+
+
 TOP_GAINERS_LIMIT = 3
 MIN_VOLUME_USD = 5_000_000
 
@@ -13,6 +18,8 @@ MIN_VOLUME_USD = 5_000_000
 def analyze_all_markets(self):
     try:
         asyncio.run(_analyze_all_markets())
+    except _TaskDisabledError:
+        logger.info("analyze_all_markets is disabled — skipping")
     except Exception as e:
         logger.error(f"Market analysis failed: {e}")
         raise self.retry(exc=e, countdown=60) from e
@@ -38,7 +45,12 @@ async def _analyze_all_markets():
     from app.services.telegram_service import TelegramService
     from app.services.trading import SignalService
     from app.workers.database import get_worker_db
+    from app.workers.task_guard import is_task_enabled
     from app.workers.tasks.trading import auto_execute_hyperliquid_signal
+
+    async with get_worker_db() as db:
+        if not await is_task_enabled(db, "app.workers.tasks.analysis.analyze_all_markets"):
+            raise _TaskDisabledError()
 
     logger.info("Starting market analysis (top gainers)...")
 
@@ -181,6 +193,8 @@ BINANCE_MIN_VOLUME_USD = 100_000_000
 def analyze_binance_markets(self):
     try:
         asyncio.run(_analyze_binance_markets())
+    except _TaskDisabledError:
+        logger.info("analyze_binance_markets is disabled — skipping")
     except Exception as e:
         logger.error(f"Binance market analysis failed: {e}")
         raise self.retry(exc=e, countdown=60) from e
@@ -209,7 +223,12 @@ async def _analyze_binance_markets():
     from app.services.telegram_service import TelegramService
     from app.services.trading import SignalService
     from app.workers.database import get_worker_db
+    from app.workers.task_guard import is_task_enabled
     from app.workers.tasks.trading import auto_execute_binance_signal
+
+    async with get_worker_db() as db:
+        if not await is_task_enabled(db, "app.workers.tasks.analysis.analyze_binance_markets"):
+            raise _TaskDisabledError()
 
     logger.info("Starting Binance Futures market analysis (top gainers)...")
 

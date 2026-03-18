@@ -6,10 +6,16 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
+class _TaskDisabledError(Exception):
+    """Raised when a task is disabled via admin config."""
+
+
 @celery_app.task(bind=True)
 def sync_all_positions(self):
     try:
         asyncio.run(_sync_all_positions())
+    except _TaskDisabledError:
+        logger.info("sync_all_positions is disabled — skipping")
     except Exception as e:
         logger.error(f"Position sync failed: {e}")
         raise
@@ -18,8 +24,11 @@ def sync_all_positions(self):
 async def _sync_all_positions():
     from app.services.trading import PositionSyncService
     from app.workers.database import get_worker_db
+    from app.workers.task_guard import is_task_enabled
 
     async with get_worker_db() as db:
+        if not await is_task_enabled(db, "app.workers.tasks.trading.sync_all_positions"):
+            raise _TaskDisabledError()
         sync_service = PositionSyncService(db)
         synced_count = await sync_service.sync_all_positions()
         await db.commit()
@@ -448,6 +457,8 @@ def monitor_binance_tpsl(self):
     """Monitor Binance trades for TP/SL fills and cancel the remaining order."""
     try:
         asyncio.run(_monitor_binance_tpsl())
+    except _TaskDisabledError:
+        logger.info("monitor_binance_tpsl is disabled — skipping")
     except Exception as e:
         logger.error(f"Binance TP/SL monitoring failed: {e}")
         raise
@@ -464,8 +475,11 @@ async def _monitor_binance_tpsl():
     from app.services.binance.utils import to_binance_symbol
     from app.services.telegram_service import TelegramService
     from app.workers.database import get_worker_db
+    from app.workers.task_guard import is_task_enabled
 
     async with get_worker_db() as db:
+        if not await is_task_enabled(db, "app.workers.tasks.trading.monitor_binance_tpsl"):
+            raise _TaskDisabledError()
         # Get all open Binance trades with TP/SL orders
         result = await db.execute(
             select(Trade)
@@ -634,6 +648,8 @@ def sync_binance_positions(self):
     """Sync balance for all active Binance exchange connections."""
     try:
         asyncio.run(_sync_binance_positions())
+    except _TaskDisabledError:
+        logger.info("sync_binance_positions is disabled — skipping")
     except Exception as e:
         logger.error(f"Binance position sync failed: {e}")
         raise
@@ -645,8 +661,11 @@ async def _sync_binance_positions():
     from app.models.exchange_connection import ExchangeConnection, ExchangeConnectionStatus
     from app.services.exchange_connection_service import ExchangeConnectionService
     from app.workers.database import get_worker_db
+    from app.workers.task_guard import is_task_enabled
 
     async with get_worker_db() as db:
+        if not await is_task_enabled(db, "app.workers.tasks.trading.sync_binance_positions"):
+            raise _TaskDisabledError()
         result = await db.execute(
             select(ExchangeConnection).where(
                 ExchangeConnection.status == ExchangeConnectionStatus.ACTIVE,

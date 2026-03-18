@@ -150,6 +150,7 @@ class CeleryTaskInfo(BaseModel):
     name: str
     schedule: str
     description: str
+    enabled: bool = True
 
 
 class LLMModelInfo(BaseModel):
@@ -1652,10 +1653,64 @@ AVAILABLE_TASKS = [
 ]
 
 
+def _task_config_key(task_name: str) -> str:
+    return f"task_enabled:{task_name}"
+
+
 @router.get("/tasks")
-async def list_available_tasks(current_user: AdminUser) -> list[CeleryTaskInfo]:
-    """List all available Celery tasks."""
-    return AVAILABLE_TASKS
+async def list_available_tasks(current_user: AdminUser, db: DB) -> list[CeleryTaskInfo]:
+    """List all available Celery tasks with their enabled/disabled status."""
+    keys = [_task_config_key(t.name) for t in AVAILABLE_TASKS]
+    rows = await db.execute(select(SystemConfig).where(SystemConfig.key.in_(keys)))
+    config_map: dict[str, str] = {row.key: row.value for row in rows.scalars().all()}
+
+    result = []
+    for task in AVAILABLE_TASKS:
+        key = _task_config_key(task.name)
+        # Missing key means enabled by default; stored as JSON "false" to disable
+        enabled = config_map.get(key, "true").strip().lower() not in ("false", '"false"', "0")
+        result.append(CeleryTaskInfo(**task.model_dump(), enabled=enabled))
+    return result
+
+
+@router.patch("/tasks/{task_name:path}/toggle")
+async def toggle_task(
+    task_name: str,
+    current_user: SuperAdminUser,
+    db: DB,
+) -> dict[str, object]:
+    """Enable or disable a Celery task by toggling its SystemConfig entry."""
+    allowed_tasks = {t.name for t in AVAILABLE_TASKS}
+    if task_name not in allowed_tasks:
+        from app.core.exceptions import ValidationError
+
+        raise ValidationError(f"Task '{task_name}' is not in the allowed list")
+
+    key = _task_config_key(task_name)
+    existing = await db.execute(select(SystemConfig).where(SystemConfig.key == key))
+    config_row = existing.scalar_one_or_none()
+
+    if config_row:
+        # Toggle current value
+        currently_enabled = config_row.value.strip().lower() not in ("false", '"false"', "0")
+        config_row.value = "false" if currently_enabled else "true"
+        new_enabled = not currently_enabled
+    else:
+        # Default is enabled → first toggle disables it
+        config_row = SystemConfig(
+            key=key,
+            value="false",
+            description=f"Task enabled flag for {task_name}",
+            category="tasks",
+        )
+        db.add(config_row)
+        new_enabled = False
+
+    await db.commit()
+    logger.info(
+        f"Admin {current_user.email} {'enabled' if new_enabled else 'disabled'} task {task_name}"
+    )
+    return {"task_name": task_name, "enabled": new_enabled}
 
 
 @router.post("/tasks/trigger")
