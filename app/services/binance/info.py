@@ -174,6 +174,16 @@ class BinanceInfoService:
                                 "5",
                             )
                         ),
+                        "max_qty": float(
+                            next(
+                                (
+                                    f["maxQty"]
+                                    for f in s.get("filters", [])
+                                    if f["filterType"] == "LOT_SIZE"
+                                ),
+                                "9999999999",
+                            )
+                        ),
                     }
 
             raise BinanceAPIError(f"Symbol {symbol} not found in exchange info")

@@ -80,10 +80,11 @@ class BinanceTradeExecutor:
 
             # Calculate quantity: position_size_usd is margin, notional = margin * leverage
             notional_usd = position_size_usd * leverage_val
-            position_size = round(
-                notional_usd / current_price,
-                precision["quantity_precision"],
-            )
+            raw_qty = notional_usd / current_price
+            # Clamp to exchange max quantity to avoid -4005 errors
+            if "max_qty" in precision and precision["max_qty"] > 0:
+                raw_qty = min(raw_qty, precision["max_qty"])
+            position_size = round(raw_qty, precision["quantity_precision"])
 
             # Create trade record
             trade = Trade(
@@ -236,7 +237,8 @@ class BinanceTradeExecutor:
                 quantity=float(trade.position_size),
                 stop_price=tp_price,
             )
-            trade.tp_order_id = str(tp_result.get("algoId", tp_result.get("orderId", "")))
+            tp_algo_id = tp_result.get("algoId") or tp_result.get("orderId")
+            trade.tp_order_id = str(tp_algo_id) if tp_algo_id else None
         except Exception as e:
             logger.error(f"Failed to place TP order for {binance_symbol}: {e}")
             # Don't fail the whole trade if TP placement fails
@@ -251,7 +253,8 @@ class BinanceTradeExecutor:
                 quantity=float(trade.position_size),
                 stop_price=sl_price,
             )
-            trade.sl_order_id = str(sl_result.get("algoId", sl_result.get("orderId", "")))
+            sl_algo_id = sl_result.get("algoId") or sl_result.get("orderId")
+            trade.sl_order_id = str(sl_algo_id) if sl_algo_id else None
         except Exception as e:
             logger.error(f"Failed to place SL order for {binance_symbol}: {e}")
 

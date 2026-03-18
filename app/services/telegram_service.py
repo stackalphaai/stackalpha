@@ -148,18 +148,28 @@ class TelegramService:
         emoji = "🟢" if trade.direction.value == "long" else "🔴"
         direction = trade.direction.value.upper()
 
+        entry_str = f"${float(trade.entry_price):,.4f}" if trade.entry_price is not None else "N/A"
+        tp_str = (
+            f"${float(trade.take_profit_price):,.4f}"
+            if trade.take_profit_price is not None
+            else "N/A"
+        )
+        sl_str = (
+            f"${float(trade.stop_loss_price):,.4f}" if trade.stop_loss_price is not None else "N/A"
+        )
+
         message = f"""
 {emoji} <b>Trade Opened</b>
 
 <b>Symbol:</b> {trade.symbol}
 <b>Direction:</b> {direction}
-<b>Entry Price:</b> ${trade.entry_price:,.4f}
+<b>Entry Price:</b> {entry_str}
 
 <b>Position Size:</b> ${trade.position_size_usd:,.2f}
 <b>Leverage:</b> {trade.leverage}x
 
-<b>Take Profit:</b> ${trade.take_profit_price:,.4f}
-<b>Stop Loss:</b> ${trade.stop_loss_price:,.4f}
+<b>Take Profit:</b> {tp_str}
+<b>Stop Loss:</b> {sl_str}
 """
 
         return await self.send_message(connection, message)
@@ -186,16 +196,24 @@ class TelegramService:
             trade.close_reason.value.replace("_", " ").title() if trade.close_reason else "Unknown"
         )
 
+        entry_str = f"${float(trade.entry_price):,.4f}" if trade.entry_price is not None else "N/A"
+        exit_str = f"${float(trade.exit_price):,.4f}" if trade.exit_price is not None else "N/A"
+        pnl_pct_str = (
+            f"{trade.realized_pnl_percent:+.2f}%"
+            if trade.realized_pnl_percent is not None
+            else "N/A"
+        )
+
         message = f"""
 {emoji} <b>Trade Closed</b>
 
 <b>Symbol:</b> {trade.symbol}
 <b>Direction:</b> {trade.direction.value.upper()}
 
-<b>Entry:</b> ${trade.entry_price:,.4f}
-<b>Exit:</b> ${trade.exit_price:,.4f}
+<b>Entry:</b> {entry_str}
+<b>Exit:</b> {exit_str}
 
-<b>P&L:</b> {pnl_text} ({trade.realized_pnl_percent:+.2f}%)
+<b>P&L:</b> {pnl_text} ({pnl_pct_str})
 <b>Close Reason:</b> {reason}
 """
 
@@ -217,6 +235,14 @@ class TelegramService:
         pnl = trade.realized_pnl or 0
         pnl_pct = trade.realized_pnl_percent or 0
 
+        entry_str = f"${float(trade.entry_price):,.4f}" if trade.entry_price is not None else "N/A"
+        tp_str = (
+            f"${float(trade.take_profit_price):,.4f}"
+            if trade.take_profit_price is not None
+            else "N/A"
+        )
+        exit_str = f"${float(trade.exit_price):,.4f}" if trade.exit_price is not None else "N/A"
+
         message = f"""
 🎯 <b>Take Profit Hit!</b>
 
@@ -224,9 +250,9 @@ class TelegramService:
 <b>Direction:</b> {direction}
 <b>Leverage:</b> {trade.leverage}x
 
-<b>Entry:</b> ${trade.entry_price:,.4f}
-<b>TP Price:</b> ${trade.take_profit_price:,.4f}
-<b>Exit:</b> ${trade.exit_price:,.4f}
+<b>Entry:</b> {entry_str}
+<b>TP Price:</b> {tp_str}
+<b>Exit:</b> {exit_str}
 
 <b>P&L:</b> +${abs(pnl):,.2f} ({pnl_pct:+.2f}%)
 
@@ -251,6 +277,12 @@ Great trade! 🚀
         pnl = trade.realized_pnl or 0
         pnl_pct = trade.realized_pnl_percent or 0
 
+        entry_str = f"${float(trade.entry_price):,.4f}" if trade.entry_price is not None else "N/A"
+        sl_str = (
+            f"${float(trade.stop_loss_price):,.4f}" if trade.stop_loss_price is not None else "N/A"
+        )
+        exit_str = f"${float(trade.exit_price):,.4f}" if trade.exit_price is not None else "N/A"
+
         message = f"""
 🛑 <b>Stop Loss Hit</b>
 
@@ -258,9 +290,9 @@ Great trade! 🚀
 <b>Direction:</b> {direction}
 <b>Leverage:</b> {trade.leverage}x
 
-<b>Entry:</b> ${trade.entry_price:,.4f}
-<b>SL Price:</b> ${trade.stop_loss_price:,.4f}
-<b>Exit:</b> ${trade.exit_price:,.4f}
+<b>Entry:</b> {entry_str}
+<b>SL Price:</b> {sl_str}
+<b>Exit:</b> {exit_str}
 
 <b>P&L:</b> -${abs(pnl):,.2f} ({pnl_pct:+.2f}%)
 
