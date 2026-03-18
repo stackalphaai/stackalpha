@@ -244,16 +244,26 @@ class BinanceTradeExecutor:
         trade.exchange_order_id = str(entry_result.get("orderId", ""))
         trade.order_response = entry_result
 
-        # Get fill price
-        fill_price = float(entry_result.get("avgPrice", 0))
-        if fill_price == 0:
-            # Fallback: get from cumulative quote / executed quantity
-            cum_quote = float(entry_result.get("cumQuote", 0))
-            executed_qty = float(entry_result.get("executedQty", 0))
-            if executed_qty > 0:
-                fill_price = cum_quote / executed_qty
+        # Get fill price.
+        # Binance Futures MARKET orders always return avgPrice="0.00000" in the order
+        # response — the actual fill price must be read from cumQuote/executedQty or
+        # directly from the position data, which is the most reliable source.
+        fill_price = 0.0
+        cum_quote = float(entry_result.get("cumQuote", 0) or 0)
+        executed_qty = float(entry_result.get("executedQty", 0) or 0)
+        if executed_qty > 0:
+            fill_price = cum_quote / executed_qty
 
-        trade.entry_price = fill_price
+        if fill_price == 0:
+            # Most reliable: query the position Binance now holds
+            position = await binance_exchange.get_position_for_symbol(binance_symbol)
+            if position and position["entry_price"] > 0:
+                fill_price = position["entry_price"]
+                # Also update margin_used from actual position data
+                if position.get("initial_margin", 0) > 0:
+                    trade.margin_used = position["initial_margin"]
+
+        trade.entry_price = fill_price if fill_price > 0 else None
         trade.opened_at = datetime.now(UTC)
 
         # Step 4: Place TP algo order
@@ -271,7 +281,6 @@ class BinanceTradeExecutor:
             trade.tp_order_id = str(tp_algo_id) if tp_algo_id else None
         except Exception as e:
             logger.error(f"Failed to place TP order for {binance_symbol}: {e}")
-            # Don't fail the whole trade if TP placement fails
 
         # Step 5: Place SL algo order
         sl_price = round(float(trade.stop_loss_price), precision["price_precision"])
@@ -287,6 +296,25 @@ class BinanceTradeExecutor:
             trade.sl_order_id = str(sl_algo_id) if sl_algo_id else None
         except Exception as e:
             logger.error(f"Failed to place SL order for {binance_symbol}: {e}")
+
+        # Step 6: If TP or SL order IDs are still missing, query open orders to recover them.
+        # Binance sometimes returns orderId=null in the response even for successful placements.
+        if not trade.tp_order_id or not trade.sl_order_id:
+            try:
+                open_orders = await binance_exchange.get_open_orders(binance_symbol)
+                for o in open_orders:
+                    oid = str(o.get("orderId") or o.get("algoId") or "")
+                    if not oid:
+                        continue
+                    order_type = o.get("type", "")
+                    if order_type == "TAKE_PROFIT_MARKET" and not trade.tp_order_id:
+                        trade.tp_order_id = oid
+                        logger.info(f"Recovered TP order ID from open orders: {oid}")
+                    elif order_type == "STOP_MARKET" and not trade.sl_order_id:
+                        trade.sl_order_id = oid
+                        logger.info(f"Recovered SL order ID from open orders: {oid}")
+            except Exception as e:
+                logger.warning(f"Could not recover TP/SL order IDs from open orders: {e}")
 
         trade.status = TradeStatus.OPEN
         logger.info(

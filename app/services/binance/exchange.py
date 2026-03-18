@@ -277,7 +277,7 @@ class BinanceExchangeService:
                 raise BinanceAPIError(f"Failed to cancel algo order: {e2}") from e2
 
     async def get_open_orders(self, symbol: str | None = None) -> list[dict[str, Any]]:
-        """Get open orders for a symbol."""
+        """Get standard open orders for a symbol (includes STOP_MARKET, TAKE_PROFIT_MARKET, etc.)."""
         try:
             c = await self.client.get_client()
             if symbol:
@@ -286,6 +286,28 @@ class BinanceExchangeService:
         except Exception as e:
             logger.error(f"Failed to get open orders: {e}")
             raise BinanceAPIError(f"Failed to get open orders: {e}") from e
+
+    async def get_position_for_symbol(self, symbol: str) -> dict[str, Any] | None:
+        """Get the open position for a specific symbol, or None if no position."""
+        try:
+            c = await self.client.get_client()
+            all_positions = await c.futures_position_information(symbol=symbol)
+            for pos in all_positions:
+                if abs(float(pos.get("positionAmt", 0))) > 0:
+                    return {
+                        "symbol": pos.get("symbol"),
+                        "size": float(pos.get("positionAmt", 0)),
+                        "entry_price": float(pos.get("entryPrice", 0)),
+                        "mark_price": float(pos.get("markPrice", 0)),
+                        "unrealized_pnl": float(pos.get("unRealizedProfit", 0)),
+                        "leverage": int(pos.get("leverage", 1)),
+                        "notional": abs(float(pos.get("notional", 0))),
+                        "initial_margin": float(pos.get("initialMargin", 0)),
+                    }
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get position for {symbol}: {e}")
+            return None
 
     async def close_position(self, symbol: str) -> dict[str, Any]:
         """Close an entire position by placing an opposite market order."""

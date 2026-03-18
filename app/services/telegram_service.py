@@ -158,6 +158,17 @@ class TelegramService:
             f"${float(trade.stop_loss_price):,.4f}" if trade.stop_loss_price is not None else "N/A"
         )
 
+        margin = (
+            trade.margin_used
+            if trade.margin_used
+            else (
+                float(trade.position_size_usd) / trade.leverage
+                if trade.position_size_usd and trade.leverage
+                else 0
+            )
+        )
+        notional = float(trade.position_size_usd) if trade.position_size_usd else 0
+
         message = f"""
 {emoji} <b>Trade Opened</b>
 
@@ -165,7 +176,8 @@ class TelegramService:
 <b>Direction:</b> {direction}
 <b>Entry Price:</b> {entry_str}
 
-<b>Position Size:</b> ${trade.position_size_usd:,.2f}
+<b>Margin:</b> ${float(margin):,.2f}
+<b>Notional:</b> ${notional:,.2f}
 <b>Leverage:</b> {trade.leverage}x
 
 <b>Take Profit:</b> {tp_str}

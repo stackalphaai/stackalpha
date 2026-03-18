@@ -237,7 +237,7 @@ async def _auto_execute_hyperliquid_signal(signal_id: str):
     from sqlalchemy.orm import selectinload
 
     from app.core.exceptions import RiskLimitError
-    from app.models import Signal, User
+    from app.models import Signal, TradeStatus, User
     from app.models.wallet import Wallet, WalletStatus
     from app.services.telegram_service import TelegramService
     from app.services.trading import TradeExecutor
@@ -299,7 +299,8 @@ async def _auto_execute_hyperliquid_signal(signal_id: str):
                 )
 
                 if (
-                    user.telegram_connection
+                    trade.status == TradeStatus.OPEN
+                    and user.telegram_connection
                     and user.telegram_connection.is_verified
                     and user.telegram_connection.trade_notifications
                 ):
@@ -349,7 +350,7 @@ async def _auto_execute_binance_signal(signal_id: str):
     from sqlalchemy.orm import selectinload
 
     from app.core.exceptions import RiskLimitError
-    from app.models import Signal, User
+    from app.models import Signal, TradeStatus, User
     from app.models.exchange_connection import (
         ExchangeConnection,
         ExchangeConnectionStatus,
@@ -421,7 +422,8 @@ async def _auto_execute_binance_signal(signal_id: str):
                 )
 
                 if (
-                    user.telegram_connection
+                    trade.status == TradeStatus.OPEN
+                    and user.telegram_connection
                     and user.telegram_connection.is_verified
                     and user.telegram_connection.trade_notifications
                 ):
@@ -508,20 +510,28 @@ async def _monitor_binance_tpsl():
             binance_symbol = to_binance_symbol(trade.symbol)
 
             try:
-                # Check if TP or SL has been filled by querying open algo orders
+                # Check if TP or SL has been filled by querying open orders.
+                # Standard conditional orders (TAKE_PROFIT_MARKET / STOP_MARKET) appear in
+                # futures_get_open_orders, NOT in the sapi algo orders endpoint.
                 binance_exchange = await create_binance_exchange_service(trade.exchange_connection)
 
                 try:
-                    open_algos = await binance_exchange.get_algo_open_orders(binance_symbol)
+                    open_orders = await binance_exchange.get_open_orders(binance_symbol)
                 except Exception:
-                    open_algos = []
+                    open_orders = []
                 finally:
                     await binance_exchange.close()
 
-                open_algo_ids = {str(o.get("algoId", "")) for o in open_algos}
+                # Accept both orderId and algoId to handle standard and algo conditional orders
+                open_order_ids: set[str] = set()
+                for o in open_orders:
+                    if o.get("orderId"):
+                        open_order_ids.add(str(o["orderId"]))
+                    if o.get("algoId"):
+                        open_order_ids.add(str(o["algoId"]))
 
-                tp_active = trade.tp_order_id and trade.tp_order_id in open_algo_ids
-                sl_active = trade.sl_order_id and trade.sl_order_id in open_algo_ids
+                tp_active = bool(trade.tp_order_id and trade.tp_order_id in open_order_ids)
+                sl_active = bool(trade.sl_order_id and trade.sl_order_id in open_order_ids)
 
                 close_reason = None
 
