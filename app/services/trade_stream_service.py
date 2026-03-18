@@ -67,6 +67,8 @@ class TradeStreamService:
     async def register_admin_client(self, websocket: WebSocket):
         self._admin_clients.add(websocket)
         logger.info(f"Admin trade stream client connected. Total: {len(self._admin_clients)}")
+        # Ensure Binance symbols are tracked for admin view before first payload
+        await self._update_binance_tracked_symbols_for_all()
         # Send initial payload immediately
         try:
             payload = await self._build_admin_payload()
@@ -122,6 +124,7 @@ class TradeStreamService:
 
                 # Broadcast to admin clients
                 if self._admin_clients:
+                    await self._update_binance_tracked_symbols_for_all()
                     await self._broadcast_to_admins()
 
                 if not self._user_clients:
@@ -168,6 +171,76 @@ class TradeStreamService:
                 logger.error(f"TradeStreamService broadcast error: {e}")
                 await asyncio.sleep(2)
 
+    def _calc_trade_row(self, trade, hl_prices: dict, binance_prices: dict) -> dict:
+        """Shared trade calculation logic for both user and admin payloads."""
+        exchange = trade.exchange or "hyperliquid"
+        symbol = trade.symbol
+
+        # Safely convert Decimal/None to float
+        entry_price = float(trade.entry_price) if trade.entry_price is not None else None
+        ep = entry_price or 0.0
+
+        # Get current price — fall back to entry_price only if no live price available
+        if exchange == "binance":
+            raw_price = binance_prices.get(symbol)
+        else:
+            raw_price = hl_prices.get(symbol)
+
+        current_price = float(raw_price) if raw_price else ep
+
+        position_size = float(trade.position_size) if trade.position_size is not None else 0.0
+        leverage = trade.leverage or 1
+        tp_price = float(trade.take_profit_price) if trade.take_profit_price is not None else None
+        sl_price = float(trade.stop_loss_price) if trade.stop_loss_price is not None else None
+
+        # Calculate unrealized PnL
+        unrealized_pnl = 0.0
+        unrealized_pnl_pct = 0.0
+        if current_price > 0 and ep > 0 and position_size > 0:
+            if trade.direction == TradeDirection.LONG:
+                raw_pnl = (current_price - ep) * position_size
+            else:
+                raw_pnl = (ep - current_price) * position_size
+
+            unrealized_pnl = raw_pnl * leverage
+            cost_basis = ep * position_size
+            if cost_basis > 0:
+                unrealized_pnl_pct = (raw_pnl / cost_basis) * 100 * leverage
+
+        # TP/SL distance percentages
+        tp_distance_pct = None
+        sl_distance_pct = None
+        if current_price > 0:
+            if tp_price:
+                if trade.direction == TradeDirection.LONG:
+                    tp_distance_pct = round((tp_price - current_price) / current_price * 100, 2)
+                else:
+                    tp_distance_pct = round((current_price - tp_price) / current_price * 100, 2)
+            if sl_price:
+                if trade.direction == TradeDirection.LONG:
+                    sl_distance_pct = round((current_price - sl_price) / current_price * 100, 2)
+                else:
+                    sl_distance_pct = round((sl_price - current_price) / current_price * 100, 2)
+
+        margin = float(trade.margin_used) if trade.margin_used is not None else None
+
+        return {
+            "exchange": exchange,
+            "symbol": symbol,
+            "ep": ep,
+            "entry_price": round(entry_price, 6) if entry_price is not None else None,
+            "current_price": round(current_price, 6) if current_price else None,
+            "tp_price": tp_price,
+            "sl_price": sl_price,
+            "tp_distance_pct": tp_distance_pct,
+            "sl_distance_pct": sl_distance_pct,
+            "position_size": position_size,
+            "leverage": leverage,
+            "unrealized_pnl": round(unrealized_pnl, 2),
+            "unrealized_pnl_pct": round(unrealized_pnl_pct, 2),
+            "margin": margin,
+        }
+
     async def _build_user_payload(self, user_id: str) -> str | None:
         """Build the JSON payload for a specific user's open trades."""
         try:
@@ -207,85 +280,36 @@ class TradeStreamService:
             total_margin_used = 0.0
 
             for trade in trades:
-                exchange = trade.exchange or "hyperliquid"
-                symbol = trade.symbol
+                r = self._calc_trade_row(trade, hl_prices, binance_prices)
 
-                entry_price = float(trade.entry_price) if trade.entry_price else 0
-
-                # Get current price from the appropriate source.
-                # Fall back to entry_price when a live price hasn't been fetched yet
-                # so PnL shows as ~0 rather than the UI displaying a missing price.
-                if exchange == "binance":
-                    current_price = binance_prices.get(symbol, 0) or entry_price
-                else:
-                    current_price = hl_prices.get(symbol, 0) or entry_price
-                position_size = float(trade.position_size) if trade.position_size else 0
-                leverage = trade.leverage or 1
-                tp_price = float(trade.take_profit_price) if trade.take_profit_price else None
-                sl_price = float(trade.stop_loss_price) if trade.stop_loss_price else None
-
-                # Calculate unrealized PnL
-                unrealized_pnl = 0.0
-                unrealized_pnl_pct = 0.0
-                if current_price > 0 and entry_price > 0 and position_size > 0:
-                    if trade.direction == TradeDirection.LONG:
-                        raw_pnl = (current_price - entry_price) * position_size
-                    else:
-                        raw_pnl = (entry_price - current_price) * position_size
-
-                    unrealized_pnl = raw_pnl * leverage
-                    cost_basis = entry_price * position_size
-                    if cost_basis > 0:
-                        unrealized_pnl_pct = (raw_pnl / cost_basis) * 100 * leverage
-
-                # TP/SL distance percentages
-                tp_distance_pct = None
-                sl_distance_pct = None
-                if current_price > 0:
-                    if tp_price:
-                        if trade.direction == TradeDirection.LONG:
-                            tp_distance_pct = round(
-                                (tp_price - current_price) / current_price * 100, 2
-                            )
-                        else:
-                            tp_distance_pct = round(
-                                (current_price - tp_price) / current_price * 100, 2
-                            )
-                    if sl_price:
-                        if trade.direction == TradeDirection.LONG:
-                            sl_distance_pct = round(
-                                (current_price - sl_price) / current_price * 100, 2
-                            )
-                        else:
-                            sl_distance_pct = round(
-                                (sl_price - current_price) / current_price * 100, 2
-                            )
-
-                margin = float(trade.margin_used) if trade.margin_used else None
-                total_unrealized_pnl += unrealized_pnl
-                total_margin_used += margin or 0
+                total_unrealized_pnl += r["unrealized_pnl"]
+                total_margin_used += r["margin"] or 0
 
                 trade_data.append(
                     {
                         "id": str(trade.id),
-                        "symbol": symbol,
-                        "exchange": exchange,
+                        "symbol": r["symbol"],
+                        "exchange": r["exchange"],
                         "direction": trade.direction.value if trade.direction else "long",
                         "status": trade.status.value if trade.status else "open",
-                        "entry_price": round(entry_price, 6) if entry_price else None,
-                        "current_price": round(current_price, 6) if current_price else None,
-                        "take_profit_price": round(tp_price, 6) if tp_price else None,
-                        "stop_loss_price": round(sl_price, 6) if sl_price else None,
-                        "position_size": round(position_size, 6),
+                        "entry_price": r["entry_price"],
+                        "current_price": r["current_price"],
+                        "take_profit_price": (
+                            round(r["tp_price"], 6) if r["tp_price"] is not None else None
+                        ),
+                        "stop_loss_price": (
+                            round(r["sl_price"], 6) if r["sl_price"] is not None else None
+                        ),
+                        "position_size": round(r["position_size"], 6),
                         "position_size_usd": round(
                             float(trade.position_size_usd) if trade.position_size_usd else 0, 2
                         ),
-                        "leverage": leverage,
-                        "unrealized_pnl": round(unrealized_pnl, 2),
-                        "unrealized_pnl_percent": round(unrealized_pnl_pct, 2),
-                        "tp_distance_pct": tp_distance_pct,
-                        "sl_distance_pct": sl_distance_pct,
-                        "margin_used": round(margin, 2) if margin else None,
+                        "leverage": r["leverage"],
+                        "unrealized_pnl": r["unrealized_pnl"],
+                        "unrealized_pnl_percent": r["unrealized_pnl_pct"],
+                        "tp_distance_pct": r["tp_distance_pct"],
+                        "sl_distance_pct": r["sl_distance_pct"],
+                        "margin_used": round(r["margin"], 2) if r["margin"] is not None else None,
                         "opened_at": trade.opened_at.isoformat() if trade.opened_at else None,
                     }
                 )
@@ -306,7 +330,7 @@ class TradeStreamService:
             return json.dumps(payload)
 
         except Exception as e:
-            logger.error(f"Error building trade payload for user {user_id}: {e}")
+            logger.error(f"Error building trade payload for user {user_id}: {e}", exc_info=True)
             return None
 
     async def _broadcast_to_admins(self):
@@ -367,57 +391,36 @@ class TradeStreamService:
             total_margin_used = 0.0
 
             for trade, email in rows:
-                exchange = trade.exchange or "hyperliquid"
-                symbol = trade.symbol
-                entry_price = float(trade.entry_price) if trade.entry_price else 0
+                r = self._calc_trade_row(trade, hl_prices, binance_prices)
 
-                if exchange == "binance":
-                    current_price = binance_prices.get(symbol, 0) or entry_price
-                else:
-                    current_price = hl_prices.get(symbol, 0) or entry_price
-
-                position_size = float(trade.position_size) if trade.position_size else 0
-                leverage = trade.leverage or 1
-
-                unrealized_pnl = 0.0
-                unrealized_pnl_pct = 0.0
-                if current_price > 0 and entry_price > 0 and position_size > 0:
-                    if trade.direction == TradeDirection.LONG:
-                        raw_pnl = (current_price - entry_price) * position_size
-                    else:
-                        raw_pnl = (entry_price - current_price) * position_size
-                    unrealized_pnl = raw_pnl * leverage
-                    cost_basis = entry_price * position_size
-                    if cost_basis > 0:
-                        unrealized_pnl_pct = (raw_pnl / cost_basis) * 100 * leverage
-
-                margin = float(trade.margin_used) if trade.margin_used else None
-                total_unrealized_pnl += unrealized_pnl
-                total_margin_used += margin or 0
+                total_unrealized_pnl += r["unrealized_pnl"]
+                total_margin_used += r["margin"] or 0
 
                 trade_data.append(
                     {
                         "id": str(trade.id),
                         "user_email": email or "—",
-                        "symbol": symbol,
-                        "exchange": exchange,
+                        "symbol": r["symbol"],
+                        "exchange": r["exchange"],
                         "direction": trade.direction.value if trade.direction else "long",
                         "status": trade.status.value if trade.status else "open",
-                        "entry_price": entry_price,
-                        "current_price": round(current_price, 6),
+                        "entry_price": r["entry_price"],
+                        "current_price": r["current_price"],
                         "take_profit_price": (
-                            float(trade.take_profit_price) if trade.take_profit_price else None
+                            round(r["tp_price"], 6) if r["tp_price"] is not None else None
                         ),
                         "stop_loss_price": (
-                            float(trade.stop_loss_price) if trade.stop_loss_price else None
+                            round(r["sl_price"], 6) if r["sl_price"] is not None else None
                         ),
                         "position_size_usd": round(
                             float(trade.position_size_usd) if trade.position_size_usd else 0, 2
                         ),
-                        "leverage": leverage,
-                        "margin_used": round(margin, 2) if margin else None,
-                        "unrealized_pnl": round(unrealized_pnl, 2),
-                        "unrealized_pnl_percent": round(unrealized_pnl_pct, 2),
+                        "leverage": r["leverage"],
+                        "margin_used": round(r["margin"], 2) if r["margin"] is not None else None,
+                        "unrealized_pnl": r["unrealized_pnl"],
+                        "unrealized_pnl_percent": r["unrealized_pnl_pct"],
+                        "tp_distance_pct": r["tp_distance_pct"],
+                        "sl_distance_pct": r["sl_distance_pct"],
                         "opened_at": trade.opened_at.isoformat() if trade.opened_at else None,
                     }
                 )
@@ -438,13 +441,12 @@ class TradeStreamService:
             )
 
         except Exception as e:
-            logger.error(f"Error building admin trade payload: {e}")
+            logger.error(f"Error building admin trade payload: {e}", exc_info=True)
             return None
 
     async def _update_binance_tracked_symbols(self):
         """Update BinancePriceService with symbols from all connected users' Binance trades."""
         try:
-            binance_symbols: set[str] = set()
             async with AsyncSessionLocal() as db:
                 user_ids = list(self._user_clients.keys())
                 if not user_ids:
@@ -467,6 +469,27 @@ class TradeStreamService:
 
         except Exception as e:
             logger.error(f"Error updating Binance tracked symbols: {e}")
+
+    async def _update_binance_tracked_symbols_for_all(self):
+        """Update BinancePriceService with Binance symbols from ALL open trades (for admin view)."""
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(Trade.symbol)
+                    .where(
+                        Trade.exchange == "binance",
+                        Trade.status.in_([TradeStatus.OPEN, TradeStatus.OPENING]),
+                    )
+                    .distinct()
+                )
+                binance_symbols = {row[0] for row in result.all()}
+
+            if binance_symbols:
+                binance_price_svc = get_binance_price_service()
+                binance_price_svc.track_symbols(binance_symbols)
+
+        except Exception as e:
+            logger.error(f"Error updating Binance tracked symbols for all: {e}")
 
 
 _trade_stream_service: TradeStreamService | None = None

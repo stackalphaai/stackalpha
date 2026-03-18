@@ -194,7 +194,7 @@ async def get_open_trades(
         .order_by(Trade.created_at.desc())
     )
     trades = list(result.scalars().all())
-    return trades
+    return [TradeResponse.model_validate(t) for t in trades]
 
 
 @router.get("/trades/{trade_id}", response_model=TradeDetailResponse)
