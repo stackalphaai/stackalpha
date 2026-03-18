@@ -303,16 +303,30 @@ class BinanceTradeExecutor:
             try:
                 open_orders = await binance_exchange.get_open_orders(binance_symbol)
                 for o in open_orders:
+                    # Only consider orders for this exact symbol to avoid cross-symbol pollution
+                    if o.get("symbol") and o.get("symbol") != binance_symbol:
+                        continue
                     oid = str(o.get("orderId") or o.get("algoId") or "")
                     if not oid:
                         continue
                     order_type = o.get("type", "")
                     if order_type == "TAKE_PROFIT_MARKET" and not trade.tp_order_id:
                         trade.tp_order_id = oid
-                        logger.info(f"Recovered TP order ID from open orders: {oid}")
+                        logger.info(
+                            f"Recovered TP order ID from open orders: {oid} "
+                            f"(symbol={o.get('symbol')}, stopPrice={o.get('stopPrice')})"
+                        )
                     elif order_type == "STOP_MARKET" and not trade.sl_order_id:
                         trade.sl_order_id = oid
-                        logger.info(f"Recovered SL order ID from open orders: {oid}")
+                        logger.info(
+                            f"Recovered SL order ID from open orders: {oid} "
+                            f"(symbol={o.get('symbol')}, stopPrice={o.get('stopPrice')})"
+                        )
+                if not trade.tp_order_id and not trade.sl_order_id:
+                    logger.warning(
+                        f"Could not recover any TP/SL order IDs for {binance_symbol} "
+                        f"from {len(open_orders)} open orders"
+                    )
             except Exception as e:
                 logger.warning(f"Could not recover TP/SL order IDs from open orders: {e}")
 

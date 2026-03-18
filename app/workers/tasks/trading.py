@@ -515,12 +515,22 @@ async def _monitor_binance_tpsl():
                 # futures_get_open_orders, NOT in the sapi algo orders endpoint.
                 binance_exchange = await create_binance_exchange_service(trade.exchange_connection)
 
+                orders_fetch_failed = False
                 try:
                     open_orders = await binance_exchange.get_open_orders(binance_symbol)
-                except Exception:
-                    open_orders = []
+                except Exception as e:
+                    # API error — skip this trade, don't assume orders are gone.
+                    # Silently treating an error as "no orders" causes spurious SYSTEM closes.
+                    logger.warning(
+                        f"get_open_orders failed for trade {trade.id} ({binance_symbol}): {e} "
+                        f"— skipping monitor check for this trade"
+                    )
+                    orders_fetch_failed = True
                 finally:
                     await binance_exchange.close()
+
+                if orders_fetch_failed:
+                    continue
 
                 # Accept both orderId and algoId to handle standard and algo conditional orders
                 open_order_ids: set[str] = set()
@@ -533,6 +543,13 @@ async def _monitor_binance_tpsl():
                 tp_active = bool(trade.tp_order_id and trade.tp_order_id in open_order_ids)
                 sl_active = bool(trade.sl_order_id and trade.sl_order_id in open_order_ids)
 
+                logger.debug(
+                    f"Trade {trade.id} ({binance_symbol}): "
+                    f"tp_id={trade.tp_order_id} active={tp_active}, "
+                    f"sl_id={trade.sl_order_id} active={sl_active}, "
+                    f"open_order_ids={open_order_ids}"
+                )
+
                 close_reason = None
 
                 if trade.tp_order_id and trade.sl_order_id:
@@ -543,14 +560,44 @@ async def _monitor_binance_tpsl():
                         # SL was filled, cancel TP
                         close_reason = TradeCloseReason.SL_HIT
                     elif not tp_active and not sl_active:
-                        # Both gone — position closed externally
-                        close_reason = TradeCloseReason.SYSTEM
-                    # else: both still active, nothing to do
+                        # Both orders gone — but DON'T assume closed yet.
+                        # Verify the Binance position is actually gone before closing DB record.
+                        # This prevents spurious SYSTEM closes when get_open_orders returns
+                        # stale/wrong data or orders were briefly not visible.
+                        try:
+                            binance_exchange_verify = await create_binance_exchange_service(
+                                trade.exchange_connection
+                            )
+                            try:
+                                position = await binance_exchange_verify.get_position_for_symbol(
+                                    binance_symbol
+                                )
+                            finally:
+                                await binance_exchange_verify.close()
+
+                            if position:
+                                # Position still open — orders may have been cancelled by Binance
+                                # (e.g. position size mismatch, API issue). Log and skip.
+                                logger.warning(
+                                    f"Trade {trade.id}: TP/SL orders gone from open_orders "
+                                    f"but position still exists on Binance "
+                                    f"(size={position.get('size')}, "
+                                    f"entry={position.get('entry_price')}). "
+                                    f"Skipping SYSTEM close — will re-check next cycle."
+                                )
+                                # Don't set close_reason — leave trade as OPEN
+                            else:
+                                # Position is genuinely gone — was closed by TP/SL or externally
+                                close_reason = TradeCloseReason.SYSTEM
+                        except Exception as e:
+                            logger.warning(
+                                f"Could not verify position for trade {trade.id}: {e} "
+                                f"— skipping SYSTEM close to be safe"
+                            )
+                    # else: both still active — nothing to do
                 else:
-                    # No algo order IDs stored (e.g. Binance returned null orderId).
-                    # TP/SL orders still work on Binance via closePosition=true, but we
-                    # can't track them by ID. Fall back to checking if the actual
-                    # position still exists on the exchange.
+                    # No order IDs stored (e.g. Binance returned null orderId during placement
+                    # and recovery also failed). Check if position still exists.
                     try:
                         binance_exchange_check = await create_binance_exchange_service(
                             trade.exchange_connection
