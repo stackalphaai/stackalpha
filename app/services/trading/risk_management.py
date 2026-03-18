@@ -234,17 +234,17 @@ class RiskManagementService:
         margin_utilization = (total_margin / total_equity * 100) if total_equity > 0 else 0
 
         return PortfolioMetrics(
-            total_equity=total_equity,
-            total_margin_used=total_margin,
-            total_unrealized_pnl=total_unrealized,
-            total_realized_pnl_today=daily_pnl,
+            total_equity=float(total_equity),
+            total_margin_used=float(total_margin),
+            total_unrealized_pnl=float(total_unrealized),
+            total_realized_pnl_today=float(daily_pnl),
             open_positions_count=len(open_trades),
-            portfolio_heat=portfolio_heat,
-            margin_utilization=margin_utilization,
-            daily_pnl=daily_pnl,
-            weekly_pnl=weekly_pnl,
-            monthly_pnl=monthly_pnl,
-            max_drawdown=0.0,  # TODO: Calculate from historical data
+            portfolio_heat=float(portfolio_heat),
+            margin_utilization=float(margin_utilization),
+            daily_pnl=float(daily_pnl),
+            weekly_pnl=float(weekly_pnl),
+            monthly_pnl=float(monthly_pnl),
+            max_drawdown=0.0,
             consecutive_losses=consecutive_losses,
         )
 
