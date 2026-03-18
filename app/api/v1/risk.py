@@ -112,8 +112,44 @@ async def get_portfolio_metrics(
     db: DB,
 ):
     """Get real-time portfolio metrics"""
+    # Try to fetch live balance from all the user's exchange connections and wallets
+    # so that total_equity reflects the real account value, not just deployed margins.
+    available_balance = 0.0
+    try:
+        from app.services.binance import create_binance_exchange_service
+        from app.services.exchange_connection_service import ExchangeConnectionService
+        from app.services.hyperliquid import get_info_service
+        from app.services.wallet_service import WalletService
+
+        exchange_service = ExchangeConnectionService(db)
+        connections = await exchange_service.get_user_connections(str(current_user.id))
+        for conn in connections:
+            if conn.is_verified:
+                try:
+                    binance = await create_binance_exchange_service(conn)
+                    bal = await binance.get_balance()
+                    available_balance += bal.get("total_balance", 0)
+                    await binance.close()
+                except Exception:
+                    pass
+
+        wallet_service = WalletService(db)
+        wallets = await wallet_service.get_user_wallets(str(current_user.id))
+        hl_info = get_info_service()
+        for wallet in wallets:
+            if wallet.query_address:
+                try:
+                    bal = await hl_info.get_user_balance(wallet.query_address)
+                    available_balance += bal.get("account_value", bal.get("available_balance", 0))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     service = RiskManagementService(db)
-    metrics = await service.get_portfolio_metrics(str(current_user.id))
+    metrics = await service.get_portfolio_metrics(
+        str(current_user.id), available_balance=available_balance
+    )
     return metrics
 
 

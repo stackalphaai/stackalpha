@@ -626,7 +626,7 @@ async def _monitor_binance_tpsl():
                                 * 100
                             )
 
-                        trade.realized_pnl = pnl * trade.leverage
+                        trade.realized_pnl = pnl
                         trade.realized_pnl_percent = pnl_pct * trade.leverage
 
                     closed_count += 1

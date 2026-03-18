@@ -222,13 +222,20 @@ class TradeExecutor:
 
             if trade.entry_price and exit_price:
                 if trade.direction == TradeDirection.LONG:
-                    pnl = (exit_price - trade.entry_price) * trade.position_size
-                    pnl_pct = (exit_price - trade.entry_price) / trade.entry_price * 100
+                    pnl = (exit_price - float(trade.entry_price)) * float(trade.position_size)
+                    pnl_pct = (
+                        (exit_price - float(trade.entry_price)) / float(trade.entry_price) * 100
+                    )
                 else:
-                    pnl = (trade.entry_price - exit_price) * trade.position_size
-                    pnl_pct = (trade.entry_price - exit_price) / trade.entry_price * 100
+                    pnl = (float(trade.entry_price) - exit_price) * float(trade.position_size)
+                    pnl_pct = (
+                        (float(trade.entry_price) - exit_price) / float(trade.entry_price) * 100
+                    )
 
-                trade.realized_pnl = pnl * trade.leverage
+                # position_size already incorporates leverage (notional/price), so pnl is
+                # already the leveraged dollar profit. Only pnl_pct needs the leverage multiplier
+                # to express the % return on the margin (not on the notional).
+                trade.realized_pnl = pnl
                 trade.realized_pnl_percent = pnl_pct * trade.leverage
 
         except Exception as e:

@@ -199,7 +199,9 @@ class BinanceTradeExecutor:
                         (float(trade.entry_price) - exit_price) / float(trade.entry_price) * 100
                     )
 
-                trade.realized_pnl = pnl * trade.leverage
+                # position_size already incorporates leverage (notional/price), so pnl is
+                # already the leveraged dollar profit. Only pnl_pct needs the leverage multiplier.
+                trade.realized_pnl = pnl
                 trade.realized_pnl_percent = pnl_pct * trade.leverage
 
         except Exception as e:

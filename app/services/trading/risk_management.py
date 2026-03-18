@@ -143,7 +143,9 @@ class RiskManagementService:
         confidence = result.scalar_one_or_none()
         return float(confidence) if confidence is not None else 0.55
 
-    async def get_portfolio_metrics(self, user_id: str) -> PortfolioMetrics:
+    async def get_portfolio_metrics(
+        self, user_id: str, available_balance: float = 0
+    ) -> PortfolioMetrics:
         """Calculate real-time portfolio metrics"""
         # Get all open positions
         open_trades_result = await self.db.execute(
@@ -207,22 +209,29 @@ class RiskManagementService:
                 break
 
         # Calculate totals
-        total_margin = sum(t.margin_used or 0 for t in open_trades)
-        total_unrealized = sum(t.unrealized_pnl or 0 for t in open_trades)
-        total_equity = total_margin + total_unrealized + daily_pnl
+        total_margin = float(sum(t.margin_used or 0 for t in open_trades))
+        total_unrealized = float(sum(t.unrealized_pnl or 0 for t in open_trades))
 
-        # Portfolio heat = total risk / total equity
+        # Equity: prefer the live exchange balance if provided, otherwise fall back to
+        # the sum of deployed margins (an undercount, but better than zero).
+        if available_balance > 0:
+            total_equity = available_balance + total_unrealized
+        else:
+            total_equity = max(total_margin + total_unrealized + float(daily_pnl), 0.01)
+
+        # Portfolio heat = (total dollar risk at stop) / equity
+        # Dollar risk per trade = notional × |entry - sl| / entry
         total_risk = sum(
-            abs(t.position_size_usd * (t.entry_price - (t.stop_loss_price or 0)))
+            float(t.position_size_usd)
+            * abs(float(t.entry_price) - float(t.stop_loss_price))
+            / float(t.entry_price)
             for t in open_trades
-            if t.entry_price and t.stop_loss_price
+            if t.entry_price and t.stop_loss_price and float(t.entry_price) > 0
         )
         portfolio_heat = (total_risk / total_equity * 100) if total_equity > 0 else 0
 
-        # Margin utilization
-        # Assume max margin is 10x total equity (conservative)
-        max_margin = total_equity * 10
-        margin_utilization = (total_margin / max_margin * 100) if max_margin > 0 else 0
+        # Margin utilization relative to account equity
+        margin_utilization = (total_margin / total_equity * 100) if total_equity > 0 else 0
 
         return PortfolioMetrics(
             total_equity=total_equity,
@@ -294,6 +303,7 @@ class RiskManagementService:
         entry_price: float,
         stop_loss_price: float | None,
         take_profit_price: float | None,
+        available_balance: float = 0,
     ) -> tuple[bool, str | None]:
         """
         Validate a trade against all risk management rules.
@@ -302,7 +312,7 @@ class RiskManagementService:
             (approved: bool, rejection_reason: str | None)
         """
         limits = await self.get_risk_limits(user_id)
-        metrics = await self.get_portfolio_metrics(user_id)
+        metrics = await self.get_portfolio_metrics(user_id, available_balance=available_balance)
 
         # 1. Check if trading is paused
         if limits.trading_paused:
@@ -407,6 +417,7 @@ class RiskManagementService:
             entry_price=entry_price,
             stop_loss_price=stop_loss_price,
             take_profit_price=take_profit_price,
+            available_balance=equity,
         )
 
         return approved, reason, clamped_leverage, clamped_size
