@@ -1669,7 +1669,14 @@ async def list_available_tasks(current_user: AdminUser, db: DB) -> list[CeleryTa
         key = _task_config_key(task.name)
         # Missing key means enabled by default; stored as JSON "false" to disable
         enabled = config_map.get(key, "true").strip().lower() not in ("false", '"false"', "0")
-        result.append(CeleryTaskInfo(**task.model_dump(), enabled=enabled))
+        result.append(
+            CeleryTaskInfo(
+                name=task.name,
+                schedule=task.schedule,
+                description=task.description,
+                enabled=enabled,
+            )
+        )
     return result
 
 
