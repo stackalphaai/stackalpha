@@ -287,6 +287,15 @@ class BinanceExchangeService:
             logger.error(f"Failed to get open orders: {e}")
             raise BinanceAPIError(f"Failed to get open orders: {e}") from e
 
+    async def get_order(self, symbol: str, order_id: int) -> dict[str, Any] | None:
+        """Get details of a specific futures order by ID (status, avgPrice, realizedPnl)."""
+        try:
+            c = await self.client.get_client()
+            return await c.futures_get_order(symbol=symbol, orderId=order_id)
+        except Exception as e:
+            logger.warning(f"Failed to get order {order_id} for {symbol}: {e}")
+            return None
+
     async def get_position_for_symbol(self, symbol: str) -> dict[str, Any] | None:
         """Get the open position for a specific symbol, or None if no position."""
         try:

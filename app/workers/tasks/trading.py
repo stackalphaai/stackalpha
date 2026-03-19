@@ -614,11 +614,92 @@ async def _monitor_binance_tpsl():
                         logger.warning(f"Could not check position for trade {trade.id}: {e}")
 
                 if close_reason:
-                    # Cancel the remaining order
+                    actual_exit_price = None
+                    actual_realized_pnl = None
+
                     binance_exchange = await create_binance_exchange_service(
                         trade.exchange_connection
                     )
                     try:
+                        # When both TP and SL are gone (SYSTEM), query order history to
+                        # determine whether it was actually TP_HIT or SL_HIT and get
+                        # the real fill price. With closePosition=true orders, Binance
+                        # cancels the other leg automatically, so both IDs disappear.
+                        if close_reason == TradeCloseReason.SYSTEM:
+                            for order_id, candidate_reason in [
+                                (trade.tp_order_id, TradeCloseReason.TP_HIT),
+                                (trade.sl_order_id, TradeCloseReason.SL_HIT),
+                            ]:
+                                if not order_id:
+                                    continue
+                                try:
+                                    order = await binance_exchange.get_order(
+                                        binance_symbol, int(order_id)
+                                    )
+                                    if order and order.get("status") == "FILLED":
+                                        close_reason = candidate_reason
+                                        avg = float(order.get("avgPrice") or 0)
+                                        if avg > 0:
+                                            actual_exit_price = avg
+                                        realized = order.get("realizedPnl")
+                                        if realized is not None:
+                                            rpnl = float(realized)
+                                            if rpnl != 0:
+                                                actual_realized_pnl = rpnl
+                                        logger.info(
+                                            f"Trade {trade.id}: order history shows "
+                                            f"{candidate_reason.value} "
+                                            f"(order {order_id}, fill={avg}, "
+                                            f"realizedPnl={realized})"
+                                        )
+                                        break
+                                except Exception as e:
+                                    logger.warning(
+                                        f"Could not fetch order {order_id} for trade "
+                                        f"{trade.id}: {e}"
+                                    )
+
+                        # For single-leg hits (one order gone, other still open),
+                        # fetch the filled order to get the actual fill price.
+                        elif close_reason == TradeCloseReason.TP_HIT and trade.tp_order_id:
+                            try:
+                                order = await binance_exchange.get_order(
+                                    binance_symbol, int(trade.tp_order_id)
+                                )
+                                if order and order.get("status") == "FILLED":
+                                    avg = float(order.get("avgPrice") or 0)
+                                    if avg > 0:
+                                        actual_exit_price = avg
+                                    realized = order.get("realizedPnl")
+                                    if realized is not None:
+                                        rpnl = float(realized)
+                                        if rpnl != 0:
+                                            actual_realized_pnl = rpnl
+                            except Exception as e:
+                                logger.warning(
+                                    f"Could not fetch TP order for trade {trade.id}: {e}"
+                                )
+
+                        elif close_reason == TradeCloseReason.SL_HIT and trade.sl_order_id:
+                            try:
+                                order = await binance_exchange.get_order(
+                                    binance_symbol, int(trade.sl_order_id)
+                                )
+                                if order and order.get("status") == "FILLED":
+                                    avg = float(order.get("avgPrice") or 0)
+                                    if avg > 0:
+                                        actual_exit_price = avg
+                                    realized = order.get("realizedPnl")
+                                    if realized is not None:
+                                        rpnl = float(realized)
+                                        if rpnl != 0:
+                                            actual_realized_pnl = rpnl
+                            except Exception as e:
+                                logger.warning(
+                                    f"Could not fetch SL order for trade {trade.id}: {e}"
+                                )
+
+                        # Cancel the remaining open leg
                         if close_reason == TradeCloseReason.TP_HIT and trade.sl_order_id:
                             try:
                                 await binance_exchange.cancel_algo_order(
@@ -637,16 +718,18 @@ async def _monitor_binance_tpsl():
                     finally:
                         await binance_exchange.close()
 
-                    # Get exit price — skip closing if we can't fetch it
-                    try:
-                        market_data = await info_service.get_market_data(binance_symbol)
-                        exit_price = market_data.get("mark_price", 0)
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to get market data for {binance_symbol}, "
-                            f"skipping close for trade {trade.id}: {e}"
-                        )
-                        continue
+                    # Prefer actual fill price; fall back to current mark price
+                    exit_price = actual_exit_price
+                    if not exit_price:
+                        try:
+                            market_data = await info_service.get_market_data(binance_symbol)
+                            exit_price = market_data.get("mark_price", 0)
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to get market data for {binance_symbol}, "
+                                f"skipping close for trade {trade.id}: {e}"
+                            )
+                            continue
 
                     if not exit_price:
                         logger.warning(
@@ -660,10 +743,24 @@ async def _monitor_binance_tpsl():
                     trade.close_reason = close_reason
                     trade.closed_at = datetime.now(UTC)
 
-                    # Calculate PnL
-                    if trade.entry_price and exit_price:
-                        from app.models import TradeDirection
+                    # Calculate PnL — use Binance's exact figure when available,
+                    # otherwise compute from fill price.
+                    from app.models import TradeDirection
 
+                    if actual_realized_pnl is not None:
+                        trade.realized_pnl = actual_realized_pnl
+                        if trade.margin_used and float(trade.margin_used) > 0:
+                            trade.realized_pnl_percent = (
+                                actual_realized_pnl / float(trade.margin_used) * 100
+                            )
+                        elif trade.entry_price and float(trade.entry_price) > 0:
+                            # Fallback: return on notional, scaled by leverage
+                            notional = float(trade.entry_price) * float(trade.position_size)
+                            if notional > 0:
+                                trade.realized_pnl_percent = (
+                                    actual_realized_pnl / notional * 100 * trade.leverage
+                                )
+                    elif trade.entry_price and exit_price:
                         if trade.direction == TradeDirection.LONG:
                             pnl = (exit_price - float(trade.entry_price)) * float(
                                 trade.position_size
