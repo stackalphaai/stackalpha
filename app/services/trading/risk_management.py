@@ -325,8 +325,11 @@ class RiskManagementService:
         # 3. Check daily loss limit
         if metrics.daily_pnl < 0:
             daily_loss_usd = abs(metrics.daily_pnl)
+            # Use start-of-day equity (current equity + today's losses) as denominator
+            # to avoid inflated percentages when balance is already reduced by losses
+            start_of_day_equity = metrics.total_equity + daily_loss_usd
             daily_loss_percent = (
-                daily_loss_usd / metrics.total_equity * 100 if metrics.total_equity > 0 else 0
+                daily_loss_usd / start_of_day_equity * 100 if start_of_day_equity > 0 else 0
             )
 
             if daily_loss_percent >= limits.max_daily_loss_percent:
@@ -334,10 +337,11 @@ class RiskManagementService:
 
         # 4. Check weekly loss limit
         if metrics.weekly_pnl < 0:
+            weekly_loss_usd = abs(metrics.weekly_pnl)
+            # Use start-of-week equity as denominator
+            start_of_week_equity = metrics.total_equity + weekly_loss_usd
             weekly_loss_percent = (
-                abs(metrics.weekly_pnl) / metrics.total_equity * 100
-                if metrics.total_equity > 0
-                else 0
+                weekly_loss_usd / start_of_week_equity * 100 if start_of_week_equity > 0 else 0
             )
             if weekly_loss_percent >= limits.max_weekly_loss_percent:
                 return False, f"Weekly loss limit: {weekly_loss_percent:.2f}%"
