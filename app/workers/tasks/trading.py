@@ -617,7 +617,7 @@ async def _monitor_binance_tpsl():
                     actual_exit_price = None
                     actual_realized_pnl = None
 
-                    from app.models import TradeDirection as _TD
+                    from app.models import TradeDirection as TradeDir
 
                     binance_exchange = await create_binance_exchange_service(
                         trade.exchange_connection
@@ -628,7 +628,7 @@ async def _monitor_binance_tpsl():
                         # they trigger — Binance returns -2013. Instead, use futures_account_trades
                         # (userTrades) which always records the actual fill executions.
                         # The closing fills have realizedPnl != 0 (opening fills have 0).
-                        closing_side = "SELL" if trade.direction == _TD.LONG else "BUY"
+                        closing_side = "SELL" if trade.direction == TradeDir.LONG else "BUY"
                         now_ms = int(datetime.now(UTC).timestamp() * 1000)
                         # Look back 2h to capture the fill regardless of how long we waited
                         open_ms = (
@@ -671,7 +671,7 @@ async def _monitor_binance_tpsl():
                                 )
                                 sl = float(trade.stop_loss_price) if trade.stop_loss_price else None
                                 entry = float(trade.entry_price) if trade.entry_price else None
-                                if trade.direction == _TD.LONG:
+                                if trade.direction == TradeDir.LONG:
                                     if tp and actual_exit_price >= tp * 0.98:
                                         close_reason = TradeCloseReason.TP_HIT
                                     elif sl and actual_exit_price <= sl * 1.02:
