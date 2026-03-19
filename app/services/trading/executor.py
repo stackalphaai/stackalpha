@@ -102,6 +102,24 @@ class TradeExecutor:
             trade.error_message = str(e)
             logger.error(f"Failed to execute trade: {e}")
 
+        # Recalculate TP/SL as the same percentage distance from the actual fill price.
+        if trade.status == TradeStatus.OPEN and trade.entry_price:
+            sig_entry = float(signal.entry_price)
+            fill = float(trade.entry_price)
+            if sig_entry > 0 and fill > 0 and signal.take_profit_price and signal.stop_loss_price:
+                sig_tp = float(signal.take_profit_price)
+                sig_sl = float(signal.stop_loss_price)
+                if trade.direction == TradeDirection.LONG:
+                    tp_pct = (sig_tp - sig_entry) / sig_entry
+                    sl_pct = (sig_entry - sig_sl) / sig_entry
+                    trade.take_profit_price = fill * (1 + tp_pct)
+                    trade.stop_loss_price = fill * (1 - sl_pct)
+                else:
+                    tp_pct = (sig_entry - sig_tp) / sig_entry
+                    sl_pct = (sig_sl - sig_entry) / sig_entry
+                    trade.take_profit_price = fill * (1 - tp_pct)
+                    trade.stop_loss_price = fill * (1 + sl_pct)
+
         await self.db.flush()
         await self.db.refresh(trade)
         return trade

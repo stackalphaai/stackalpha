@@ -124,7 +124,9 @@ class BinanceTradeExecutor:
                         f"(qty={adj_qty}) after -4005"
                     )
                 try:
-                    trade = await self._open_binance_position(trade, binance_exchange, precision)
+                    trade = await self._open_binance_position(
+                        trade, binance_exchange, precision, float(signal.entry_price)
+                    )
                     open_error = None
                     break
                 except Exception as e:
@@ -219,6 +221,7 @@ class BinanceTradeExecutor:
         trade: Trade,
         binance_exchange,
         precision: dict,
+        signal_entry_price: float = 0.0,
     ) -> Trade:
         """Open a Binance Futures position with TP/SL."""
         trade.status = TradeStatus.OPENING
@@ -265,6 +268,34 @@ class BinanceTradeExecutor:
 
         trade.entry_price = fill_price if fill_price > 0 else None
         trade.opened_at = datetime.now(UTC)
+
+        # Recalculate TP/SL as the same percentage distance from the actual fill price.
+        # The signal's TP/SL are absolute prices relative to the signal's entry price at
+        # generation time. By the time we fill, price has moved — we preserve the intended
+        # R:R ratio by re-anchoring to the real fill price.
+        if (
+            fill_price > 0
+            and signal_entry_price > 0
+            and trade.take_profit_price
+            and trade.stop_loss_price
+        ):
+            sig_tp = float(trade.take_profit_price)
+            sig_sl = float(trade.stop_loss_price)
+            if trade.direction == TradeDirection.LONG:
+                tp_pct = (sig_tp - signal_entry_price) / signal_entry_price
+                sl_pct = (signal_entry_price - sig_sl) / signal_entry_price
+                trade.take_profit_price = fill_price * (1 + tp_pct)
+                trade.stop_loss_price = fill_price * (1 - sl_pct)
+            else:
+                tp_pct = (signal_entry_price - sig_tp) / signal_entry_price
+                sl_pct = (sig_sl - signal_entry_price) / signal_entry_price
+                trade.take_profit_price = fill_price * (1 - tp_pct)
+                trade.stop_loss_price = fill_price * (1 + sl_pct)
+            logger.info(
+                f"TP/SL anchored to fill ${fill_price:.6f} (signal entry ${signal_entry_price:.6f}): "
+                f"TP=${float(trade.take_profit_price):.6f} ({tp_pct * 100:.2f}%), "
+                f"SL=${float(trade.stop_loss_price):.6f} ({sl_pct * 100:.2f}%)"
+            )
 
         # Step 4: Place TP algo order
         close_side = "SELL" if trade.direction == TradeDirection.LONG else "BUY"
