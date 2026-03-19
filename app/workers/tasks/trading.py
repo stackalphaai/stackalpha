@@ -617,86 +617,92 @@ async def _monitor_binance_tpsl():
                     actual_exit_price = None
                     actual_realized_pnl = None
 
+                    from app.models import TradeDirection as _TD
+
                     binance_exchange = await create_binance_exchange_service(
                         trade.exchange_connection
                     )
                     try:
-                        # When both TP and SL are gone (SYSTEM), query order history to
-                        # determine whether it was actually TP_HIT or SL_HIT and get
-                        # the real fill price. With closePosition=true orders, Binance
-                        # cancels the other leg automatically, so both IDs disappear.
-                        if close_reason == TradeCloseReason.SYSTEM:
-                            for order_id, candidate_reason in [
-                                (trade.tp_order_id, TradeCloseReason.TP_HIT),
-                                (trade.sl_order_id, TradeCloseReason.SL_HIT),
-                            ]:
-                                if not order_id:
-                                    continue
-                                try:
-                                    order = await binance_exchange.get_order(
-                                        binance_symbol, int(order_id)
+                        # Conditional orders (TAKE_PROFIT_MARKET / STOP_MARKET) with
+                        # closePosition=true are NOT queryable via futures_get_order after
+                        # they trigger — Binance returns -2013. Instead, use futures_account_trades
+                        # (userTrades) which always records the actual fill executions.
+                        # The closing fills have realizedPnl != 0 (opening fills have 0).
+                        closing_side = "SELL" if trade.direction == _TD.LONG else "BUY"
+                        now_ms = int(datetime.now(UTC).timestamp() * 1000)
+                        # Look back 2h to capture the fill regardless of how long we waited
+                        open_ms = (
+                            int(trade.opened_at.timestamp() * 1000)
+                            if trade.opened_at
+                            else now_ms - 7200000
+                        )
+
+                        try:
+                            fills = await binance_exchange.get_recent_closing_trades(
+                                binance_symbol, closing_side, open_ms, now_ms
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"Could not fetch closing trades for trade {trade.id}: {e}"
+                            )
+                            fills = []
+
+                        if fills:
+                            total_qty = sum(float(f.get("qty", 0)) for f in fills)
+                            total_pnl = sum(float(f.get("realizedPnl", 0)) for f in fills)
+                            if total_qty > 0:
+                                wavg = (
+                                    sum(
+                                        float(f.get("price", 0)) * float(f.get("qty", 0))
+                                        for f in fills
                                     )
-                                    if order and order.get("status") == "FILLED":
-                                        close_reason = candidate_reason
-                                        avg = float(order.get("avgPrice") or 0)
-                                        if avg > 0:
-                                            actual_exit_price = avg
-                                        realized = order.get("realizedPnl")
-                                        if realized is not None:
-                                            rpnl = float(realized)
-                                            if rpnl != 0:
-                                                actual_realized_pnl = rpnl
-                                        logger.info(
-                                            f"Trade {trade.id}: order history shows "
-                                            f"{candidate_reason.value} "
-                                            f"(order {order_id}, fill={avg}, "
-                                            f"realizedPnl={realized})"
+                                    / total_qty
+                                )
+                                actual_exit_price = wavg
+                            if total_pnl != 0:
+                                actual_realized_pnl = total_pnl
+
+                            # For SYSTEM close: determine whether TP or SL was hit
+                            if close_reason == TradeCloseReason.SYSTEM and actual_exit_price:
+                                tp = (
+                                    float(trade.take_profit_price)
+                                    if trade.take_profit_price
+                                    else None
+                                )
+                                sl = float(trade.stop_loss_price) if trade.stop_loss_price else None
+                                entry = float(trade.entry_price) if trade.entry_price else None
+                                if trade.direction == _TD.LONG:
+                                    if tp and actual_exit_price >= tp * 0.98:
+                                        close_reason = TradeCloseReason.TP_HIT
+                                    elif sl and actual_exit_price <= sl * 1.02:
+                                        close_reason = TradeCloseReason.SL_HIT
+                                    elif entry:
+                                        close_reason = (
+                                            TradeCloseReason.TP_HIT
+                                            if actual_exit_price >= entry
+                                            else TradeCloseReason.SL_HIT
                                         )
-                                        break
-                                except Exception as e:
-                                    logger.warning(
-                                        f"Could not fetch order {order_id} for trade "
-                                        f"{trade.id}: {e}"
-                                    )
-
-                        # For single-leg hits (one order gone, other still open),
-                        # fetch the filled order to get the actual fill price.
-                        elif close_reason == TradeCloseReason.TP_HIT and trade.tp_order_id:
-                            try:
-                                order = await binance_exchange.get_order(
-                                    binance_symbol, int(trade.tp_order_id)
+                                else:
+                                    if tp and actual_exit_price <= tp * 1.02:
+                                        close_reason = TradeCloseReason.TP_HIT
+                                    elif sl and actual_exit_price >= sl * 0.98:
+                                        close_reason = TradeCloseReason.SL_HIT
+                                    elif entry:
+                                        close_reason = (
+                                            TradeCloseReason.TP_HIT
+                                            if actual_exit_price <= entry
+                                            else TradeCloseReason.SL_HIT
+                                        )
+                                logger.info(
+                                    f"Trade {trade.id}: resolved via userTrades as "
+                                    f"{close_reason.value} (wavg={actual_exit_price:.6f}, "
+                                    f"pnl={actual_realized_pnl})"
                                 )
-                                if order and order.get("status") == "FILLED":
-                                    avg = float(order.get("avgPrice") or 0)
-                                    if avg > 0:
-                                        actual_exit_price = avg
-                                    realized = order.get("realizedPnl")
-                                    if realized is not None:
-                                        rpnl = float(realized)
-                                        if rpnl != 0:
-                                            actual_realized_pnl = rpnl
-                            except Exception as e:
-                                logger.warning(
-                                    f"Could not fetch TP order for trade {trade.id}: {e}"
-                                )
-
-                        elif close_reason == TradeCloseReason.SL_HIT and trade.sl_order_id:
-                            try:
-                                order = await binance_exchange.get_order(
-                                    binance_symbol, int(trade.sl_order_id)
-                                )
-                                if order and order.get("status") == "FILLED":
-                                    avg = float(order.get("avgPrice") or 0)
-                                    if avg > 0:
-                                        actual_exit_price = avg
-                                    realized = order.get("realizedPnl")
-                                    if realized is not None:
-                                        rpnl = float(realized)
-                                        if rpnl != 0:
-                                            actual_realized_pnl = rpnl
-                            except Exception as e:
-                                logger.warning(
-                                    f"Could not fetch SL order for trade {trade.id}: {e}"
+                            else:
+                                logger.info(
+                                    f"Trade {trade.id} ({close_reason.value}): "
+                                    f"actual fill {actual_exit_price:.6f}, "
+                                    f"pnl={actual_realized_pnl}"
                                 )
 
                         # Cancel the remaining open leg

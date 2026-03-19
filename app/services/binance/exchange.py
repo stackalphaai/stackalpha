@@ -296,6 +296,35 @@ class BinanceExchangeService:
             logger.warning(f"Failed to get order {order_id} for {symbol}: {e}")
             return None
 
+    async def get_recent_closing_trades(
+        self,
+        symbol: str,
+        closing_side: str,
+        start_ms: int,
+        end_ms: int,
+    ) -> list[dict[str, Any]]:
+        """Fetch actual trade fills that closed a position.
+
+        Conditional orders (TAKE_PROFIT_MARKET / STOP_MARKET) are not queryable
+        by orderId after they trigger, but the resulting fills always appear in
+        futures_account_trades (userTrades). We filter for the closing side and
+        only include fills that carry a non-zero realizedPnl (i.e., position-reducing
+        fills, not opening fills).
+        """
+        try:
+            c = await self.client.get_client()
+            trades = await c.futures_account_trades(
+                symbol=symbol, startTime=start_ms, endTime=end_ms
+            )
+            return [
+                t
+                for t in trades
+                if t.get("side") == closing_side and float(t.get("realizedPnl") or 0) != 0
+            ]
+        except Exception as e:
+            logger.warning(f"Failed to get closing trades for {symbol}: {e}")
+            return []
+
     async def get_position_for_symbol(self, symbol: str) -> dict[str, Any] | None:
         """Get the open position for a specific symbol, or None if no position."""
         try:
