@@ -157,6 +157,14 @@ Your response MUST be valid JSON with the following structure:
     "risk_level": "low" | "medium" | "high"
 }}
 
+EXTREME RSI SHORT SETUPS (RSI >= 99):
+When RSI >= 99, the coin has pumped hard and is extremely overbought. This is a SHORT opportunity:
+- Recommend "short" with confidence 0.65-0.80 if RSI >= 99 AND volume is high AND ADX is strong
+- Use a TIGHT stop loss: {sl_min}-{sl_max}% above current price (counter-trend trade, protect quickly)
+- Take profit: {tp_min}-{tp_max}% below current price (quick scalp on mean reversion)
+- Do NOT recommend "long" when RSI >= 99
+- Do NOT return "neutral" just because RSI is at extreme — extreme RSI IS the signal
+
 STRICT FILTERING — return "neutral" if ANY of these apply:
 - ADX < {min_adx} (no clear trend — avoid choppy/ranging markets)
 - RSI between 40-60 with no clear divergence (indecisive momentum)

@@ -97,9 +97,10 @@ class ConsensusEngine:
         adx = indicators.get("adx", 0)
         current_price = indicators.get("current_price", 0)
 
-        # RSI stuck at extremes (0 or 100) means no real price movement
-        if rsi <= 1 or rsi >= 99:
-            logger.info(f"Skipping {symbol}: degenerate RSI={rsi:.1f}")
+        # RSI near 0 means coin is essentially dead / delisted — skip.
+        # RSI >= 99 (extreme overbought) is NOT skipped — it is a strong short signal.
+        if rsi <= 1:
+            logger.info(f"Skipping {symbol}: RSI={rsi:.1f} (dead/delisted coin)")
             return False
 
         # ATR of 0 means zero volatility — no trade opportunity
