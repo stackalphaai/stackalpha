@@ -605,6 +605,22 @@ CONFIGURABLE_SETTINGS: dict[str, dict[str, Any]] = {
         "description": "OpenRouter API base URL",
         "type": "str",
     },
+    # Twitter/X Agent
+    "twitter_enabled": {
+        "category": "twitter",
+        "description": "Enable automatic daily tweet posting",
+        "type": "bool",
+    },
+    "twitter_prompt": {
+        "category": "twitter",
+        "description": "System prompt for LLM tweet generation",
+        "type": "str",
+    },
+    "twitter_post_hour": {
+        "category": "twitter",
+        "description": "Hour to post daily tweet (in ET, 0-23)",
+        "type": "int",
+    },
 }
 
 
@@ -809,6 +825,64 @@ async def update_active_models(
         "count": len(active),
         "message": f"Updated to {len(active)} active model(s)",
     }
+
+
+# ============================================================================
+# Twitter/X Agent
+# ============================================================================
+
+
+@router.get("/twitter/preview")
+async def preview_tweet(current_user: AdminUser) -> dict[str, Any]:
+    """Generate a tweet preview without posting it."""
+    from app.services.twitter_service import generate_tweet
+
+    tweet = await generate_tweet()
+    return {
+        "tweet": tweet,
+        "length": len(tweet),
+        "max_length": 280,
+    }
+
+
+@router.post("/twitter/post")
+async def post_tweet_now(
+    current_user: SuperAdminUser,
+) -> dict[str, Any]:
+    """Manually trigger a tweet post right now."""
+    from app.services.twitter_service import generate_and_post
+
+    result = await generate_and_post()
+    if not result.get("success"):
+        from app.core.exceptions import BadRequestError
+
+        raise BadRequestError(f"Tweet failed: {result.get('error')}")
+    return result
+
+
+class CustomTweetRequest(BaseModel):
+    text: str
+
+
+@router.post("/twitter/post-custom")
+async def post_custom_tweet(
+    body: CustomTweetRequest,
+    current_user: SuperAdminUser,
+) -> dict[str, Any]:
+    """Post a custom tweet (admin-written, no LLM generation)."""
+    from app.services.twitter_service import post_tweet
+
+    if len(body.text) > 280:
+        from app.core.exceptions import BadRequestError
+
+        raise BadRequestError(f"Tweet too long: {len(body.text)}/280 chars")
+
+    result = post_tweet(body.text)
+    if not result.get("success"):
+        from app.core.exceptions import BadRequestError
+
+        raise BadRequestError(f"Tweet failed: {result.get('error')}")
+    return result
 
 
 # ============================================================================

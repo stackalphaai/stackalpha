@@ -3,6 +3,7 @@ import logging
 from datetime import UTC, datetime
 
 from celery import Celery
+from celery.schedules import crontab
 from celery.signals import task_failure
 
 from app.config import settings
@@ -18,6 +19,7 @@ celery_app = Celery(
         "app.workers.tasks.trading",
         "app.workers.tasks.notifications",
         "app.workers.tasks.maintenance",
+        "app.workers.tasks.twitter",
     ],
 )
 
@@ -80,6 +82,11 @@ celery_app.conf.beat_schedule = {
     "sync-wallet-balances-every-2-minutes": {
         "task": "app.workers.tasks.maintenance.sync_wallet_balances",
         "schedule": 120.0,
+    },
+    # Twitter/X daily post at 09:00 UTC (= 4:00 AM ET / 5:00 AM EDT)
+    "post-daily-tweet-4am-et": {
+        "task": "app.workers.tasks.twitter.post_daily_tweet",
+        "schedule": crontab(hour=9, minute=0),
     },
 }
 

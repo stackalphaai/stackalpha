@@ -118,6 +118,22 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 100
     rate_limit_window_seconds: int = 60
 
+    # Twitter/X Agent (OAuth 1.0a — all 4 keys needed to post tweets)
+    twitter_consumer_key: str = ""
+    twitter_consumer_secret: str = ""
+    twitter_access_token: str = ""
+    twitter_access_token_secret: str = ""
+    twitter_bearer_token: str = ""
+    twitter_enabled: bool = False
+    twitter_post_hour: int = 4  # Hour in ET (America/New_York)
+    twitter_prompt: str = (
+        "You are the social media voice of StackAlpha (@stackalpha_xyz), "
+        "an AI-powered algorithmic trading platform. Write a single tweet (max 280 chars) "
+        "about AI/algo trading. Mix professional fintech insight, casual crypto twitter energy, "
+        "and educational value. Mention StackAlpha naturally. No hashtag spam (1-2 max). "
+        "No emojis overload. Be authentic, not salesy."
+    )
+
     # Celery
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
