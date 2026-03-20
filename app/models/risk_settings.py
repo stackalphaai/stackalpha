@@ -63,6 +63,11 @@ class RiskSettings(Base):
     paused_by: Mapped[str | None] = mapped_column(String(50), nullable=True)
     auto_resume_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Risk counters reset — trades before this timestamp are ignored in P&L calcs
+    risk_counters_reset_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # Auto-Trading Features
     enable_trailing_stop: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     trailing_stop_percent: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False, default=1.5)

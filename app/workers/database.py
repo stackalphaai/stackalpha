@@ -56,3 +56,15 @@ async def get_worker_db() -> AsyncGenerator[AsyncSession, None]:
 
     # Dispose of the engine to clean up connections
     await engine.dispose()
+
+
+async def load_worker_config_overrides() -> int:
+    """Load admin config overrides from DB into in-memory settings.
+
+    Call this at the start of Celery tasks that use settings.llm_* values
+    so admin changes are picked up without restarting workers.
+    """
+    from app.api.v1.admin import load_config_overrides
+
+    async with get_worker_db() as db:
+        return await load_config_overrides(db)

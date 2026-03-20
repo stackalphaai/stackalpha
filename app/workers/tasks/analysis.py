@@ -44,9 +44,12 @@ async def _analyze_all_markets():
     from app.services.hyperliquid import get_info_service
     from app.services.telegram_service import TelegramService
     from app.services.trading import SignalService
-    from app.workers.database import get_worker_db
+    from app.workers.database import get_worker_db, load_worker_config_overrides
     from app.workers.task_guard import is_task_enabled
     from app.workers.tasks.trading import auto_execute_hyperliquid_signal
+
+    # Load admin-defined config overrides from DB
+    await load_worker_config_overrides()
 
     async with get_worker_db() as db:
         if not await is_task_enabled(db, "app.workers.tasks.analysis.analyze_all_markets"):
@@ -185,8 +188,8 @@ async def _analyze_single_market(symbol: str):
 # Binance market analysis
 # ---------------------------------------------------------------------------
 
-BINANCE_TOP_GAINERS_LIMIT = 10
-BINANCE_MIN_VOLUME_USD = 100_000_000
+BINANCE_TOP_GAINERS_LIMIT = 10  # fallback; overridden by settings.binance_top_movers_limit
+BINANCE_MIN_VOLUME_USD = 100_000_000  # fallback; overridden by settings.binance_min_volume_usd
 
 
 @celery_app.task(bind=True, max_retries=3)
@@ -222,13 +225,22 @@ async def _analyze_binance_markets():
     from app.services.binance import get_binance_info_service
     from app.services.telegram_service import TelegramService
     from app.services.trading import SignalService
-    from app.workers.database import get_worker_db
+    from app.workers.database import get_worker_db, load_worker_config_overrides
     from app.workers.task_guard import is_task_enabled
     from app.workers.tasks.trading import auto_execute_binance_signal
+
+    # Load admin-defined config overrides from DB
+    await load_worker_config_overrides()
 
     async with get_worker_db() as db:
         if not await is_task_enabled(db, "app.workers.tasks.analysis.analyze_binance_markets"):
             raise _TaskDisabledError()
+
+    # Use admin-configured values, falling back to module-level constants
+    from app.config import settings as app_settings
+
+    min_volume = getattr(app_settings, "binance_min_volume_usd", BINANCE_MIN_VOLUME_USD)
+    top_limit = getattr(app_settings, "binance_top_movers_limit", BINANCE_TOP_GAINERS_LIMIT)
 
     logger.info("Starting Binance Futures market analysis (top gainers)...")
 
@@ -236,22 +248,20 @@ async def _analyze_binance_markets():
 
     try:
         top_gainers = await info_service.get_top_gainers(
-            min_volume=BINANCE_MIN_VOLUME_USD,
-            limit=BINANCE_TOP_GAINERS_LIMIT + 5,  # fetch extra to account for skips
+            min_volume=min_volume,
+            limit=top_limit + 5,  # fetch extra to account for skips
         )
     except Exception as e:
         logger.error(f"Failed to fetch Binance Futures top gainers: {e}")
         return
 
     if not top_gainers:
-        logger.warning(
-            f"No Binance Futures gainers found above ${BINANCE_MIN_VOLUME_USD:,.0f} volume"
-        )
+        logger.warning(f"No Binance Futures gainers found above ${min_volume:,.0f} volume")
         return
 
     summary = ", ".join(
         f"{c['symbol']} (+{c['price_change_percent_24h']:.1f}%, vol ${c['volume_24h']:,.0f})"
-        for c in top_gainers[:BINANCE_TOP_GAINERS_LIMIT]
+        for c in top_gainers[:top_limit]
     )
     logger.info(f"Binance Futures top gainers: {summary}")
 
@@ -267,7 +277,7 @@ async def _analyze_binance_markets():
         analyzed_count = 0
 
         for coin_data in top_gainers:
-            if analyzed_count >= BINANCE_TOP_GAINERS_LIMIT:
+            if analyzed_count >= top_limit:
                 break
 
             symbol = coin_data.get("symbol")

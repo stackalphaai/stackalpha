@@ -812,6 +812,84 @@ async def update_active_models(
 
 
 # ============================================================================
+# Risk Management (Admin)
+# ============================================================================
+
+
+@router.post("/users/{user_id}/reset-risk-limits")
+async def reset_user_risk_limits(
+    user_id: str,
+    current_user: SuperAdminUser,
+    db: DB,
+) -> dict[str, Any]:
+    """Reset a user's daily/weekly/monthly loss counters so they can trade again.
+
+    Sets risk_counters_reset_at to now — all trades closed before this timestamp
+    are ignored in P&L calculations for risk limit checks.
+    """
+    from app.models.risk_settings import RiskSettings
+
+    result = await db.execute(select(RiskSettings).where(RiskSettings.user_id == user_id))
+    risk_settings = result.scalar_one_or_none()
+
+    if not risk_settings:
+        from app.core.exceptions import NotFoundError
+
+        raise NotFoundError("Risk settings for user")
+
+    risk_settings.risk_counters_reset_at = datetime.now(UTC)
+    # Also unpause trading and reset circuit breaker if they were triggered
+    risk_settings.trading_paused = False
+    risk_settings.circuit_breaker_status = "active"
+    risk_settings.paused_reason = None
+    risk_settings.paused_at = None
+    risk_settings.paused_by = None
+
+    await db.commit()
+
+    logger.info(
+        f"Admin {current_user.email} reset risk limits for user {user_id} "
+        f"at {risk_settings.risk_counters_reset_at}"
+    )
+
+    return {
+        "message": "Risk limits reset successfully",
+        "user_id": user_id,
+        "reset_at": str(risk_settings.risk_counters_reset_at),
+    }
+
+
+@router.post("/reset-all-risk-limits")
+async def reset_all_risk_limits(
+    current_user: SuperAdminUser,
+    db: DB,
+) -> dict[str, Any]:
+    """Reset daily/weekly/monthly loss counters for ALL users."""
+    from app.models.risk_settings import RiskSettings
+
+    now = datetime.now(UTC)
+    result = await db.execute(
+        update(RiskSettings).values(
+            risk_counters_reset_at=now,
+            trading_paused=False,
+            circuit_breaker_status="active",
+            paused_reason=None,
+            paused_at=None,
+            paused_by=None,
+        )
+    )
+    await db.commit()
+
+    logger.info(f"Admin {current_user.email} reset risk limits for ALL users at {now}")
+
+    return {
+        "message": "Risk limits reset for all users",
+        "affected_rows": result.rowcount,
+        "reset_at": str(now),
+    }
+
+
+# ============================================================================
 # User Management
 # ============================================================================
 

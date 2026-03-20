@@ -147,6 +147,12 @@ class RiskManagementService:
         self, user_id: str, available_balance: float = 0
     ) -> PortfolioMetrics:
         """Calculate real-time portfolio metrics"""
+        # Check if user has a risk counters reset timestamp
+        reset_result = await self.db.execute(
+            select(RiskSettings.risk_counters_reset_at).where(RiskSettings.user_id == user_id)
+        )
+        risk_reset_at = reset_result.scalar_one_or_none()
+
         # Get all open positions
         open_trades_result = await self.db.execute(
             select(Trade).where(
@@ -158,45 +164,58 @@ class RiskManagementService:
 
         # Get today's closed trades for P&L
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        # If risk was reset after today_start, use the reset time as floor
+        daily_floor = (
+            max(today_start, risk_reset_at.replace(tzinfo=None)) if risk_reset_at else today_start
+        )
         today_pnl_result = await self.db.execute(
             select(func.sum(Trade.realized_pnl)).where(
                 Trade.user_id == user_id,
                 Trade.status == TradeStatus.CLOSED,
-                Trade.closed_at >= today_start,
+                Trade.closed_at >= daily_floor,
             )
         )
         daily_pnl = Decimal(str(today_pnl_result.scalar() or 0))
 
         # Calculate weekly P&L
         week_start = today_start - timedelta(days=today_start.weekday())
+        weekly_floor = (
+            max(week_start, risk_reset_at.replace(tzinfo=None)) if risk_reset_at else week_start
+        )
         weekly_pnl_result = await self.db.execute(
             select(func.sum(Trade.realized_pnl)).where(
                 Trade.user_id == user_id,
                 Trade.status == TradeStatus.CLOSED,
-                Trade.closed_at >= week_start,
+                Trade.closed_at >= weekly_floor,
             )
         )
         weekly_pnl = Decimal(str(weekly_pnl_result.scalar() or 0))
 
         # Calculate monthly P&L
         month_start = today_start.replace(day=1)
+        monthly_floor = (
+            max(month_start, risk_reset_at.replace(tzinfo=None)) if risk_reset_at else month_start
+        )
         monthly_pnl_result = await self.db.execute(
             select(func.sum(Trade.realized_pnl)).where(
                 Trade.user_id == user_id,
                 Trade.status == TradeStatus.CLOSED,
-                Trade.closed_at >= month_start,
+                Trade.closed_at >= monthly_floor,
             )
         )
         monthly_pnl = Decimal(str(monthly_pnl_result.scalar() or 0))
 
-        # Calculate consecutive losses
+        # Calculate consecutive losses (also respect reset)
+        consec_filters = [
+            Trade.user_id == user_id,
+            Trade.status == TradeStatus.CLOSED,
+            Trade.realized_pnl.isnot(None),
+        ]
+        if risk_reset_at:
+            consec_filters.append(Trade.closed_at >= risk_reset_at)
         recent_trades_result = await self.db.execute(
             select(Trade.realized_pnl)
-            .where(
-                Trade.user_id == user_id,
-                Trade.status == TradeStatus.CLOSED,
-                Trade.realized_pnl.isnot(None),
-            )
+            .where(*consec_filters)
             .order_by(Trade.closed_at.desc())
             .limit(10)
         )
