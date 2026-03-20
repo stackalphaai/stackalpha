@@ -131,9 +131,11 @@ class BinanceExchangeService:
         quantity: float,
         stop_price: float,
     ) -> dict[str, Any]:
-        """Place a Take Profit algo order using /fapi/v1/algoOrder.
+        """Place a Take Profit conditional order.
 
-        CRITICAL: Since Dec 2025, all conditional orders must use the algoOrder endpoint.
+        Since Dec 2025, Binance requires conditional orders to use the algoOrder
+        endpoint. We try the standard endpoint first (works on some accounts) and
+        fall back to /fapi/v1/algoOrder on -4120.
         """
         try:
             c = await self.client.get_client()
@@ -150,9 +152,7 @@ class BinanceExchangeService:
             )
             return result
         except Exception as e:
-            error_str = str(e)
-            # If the standard endpoint fails with -4120, try algo order endpoint
-            if "-4120" in error_str:
+            if "-4120" in str(e):
                 return await self._place_algo_conditional_order(
                     symbol=symbol,
                     side=side,
@@ -170,9 +170,11 @@ class BinanceExchangeService:
         quantity: float,
         stop_price: float,
     ) -> dict[str, Any]:
-        """Place a Stop Loss algo order using /fapi/v1/algoOrder.
+        """Place a Stop Loss conditional order.
 
-        CRITICAL: Since Dec 2025, all conditional orders must use the algoOrder endpoint.
+        Since Dec 2025, Binance requires conditional orders to use the algoOrder
+        endpoint. We try the standard endpoint first (works on some accounts) and
+        fall back to /fapi/v1/algoOrder on -4120.
         """
         try:
             c = await self.client.get_client()
@@ -189,8 +191,7 @@ class BinanceExchangeService:
             )
             return result
         except Exception as e:
-            error_str = str(e)
-            if "-4120" in error_str:
+            if "-4120" in str(e):
                 return await self._place_algo_conditional_order(
                     symbol=symbol,
                     side=side,

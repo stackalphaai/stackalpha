@@ -143,47 +143,39 @@ class BinanceInfoService:
             logger.error(f"Failed to get klines for {symbol}: {e}")
             raise BinanceAPIError(f"Failed to get klines: {e}") from e
 
-    async def get_symbol_precision(self, symbol: str) -> dict[str, int]:
-        """Get quantity and price precision for a symbol from exchange info."""
+    async def get_symbol_precision(self, symbol: str) -> dict[str, Any]:
+        """Get quantity/price precision and Binance order filters for a symbol.
+
+        Returns step_size, tick_size, min_qty, max_qty (LOT_SIZE), market_max_qty
+        (MARKET_LOT_SIZE), and min_notional so callers can comply with all filters.
+        """
         try:
             client = await self._client.get_client()
             info = await client.futures_exchange_info()
 
             for s in info.get("symbols", []):
                 if s["symbol"] == symbol:
+                    filters = {f["filterType"]: f for f in s.get("filters", [])}
+                    lot = filters.get("LOT_SIZE", {})
+                    market_lot = filters.get("MARKET_LOT_SIZE", {})
+                    price_filter = filters.get("PRICE_FILTER", {})
+                    notional_filter = filters.get("MIN_NOTIONAL", {})
+
                     return {
                         "quantity_precision": s.get("quantityPrecision", 3),
                         "price_precision": s.get("pricePrecision", 2),
-                        "min_qty": float(
-                            next(
-                                (
-                                    f["minQty"]
-                                    for f in s.get("filters", [])
-                                    if f["filterType"] == "LOT_SIZE"
-                                ),
-                                "0.001",
-                            )
+                        # LOT_SIZE filter
+                        "step_size": float(lot.get("stepSize", "0.001")),
+                        "min_qty": float(lot.get("minQty", "0.001")),
+                        "max_qty": float(lot.get("maxQty", "9999999999")),
+                        # MARKET_LOT_SIZE (often stricter maxQty for MARKET orders)
+                        "market_max_qty": float(
+                            market_lot.get("maxQty", lot.get("maxQty", "9999999999"))
                         ),
-                        "min_notional": float(
-                            next(
-                                (
-                                    f["notional"]
-                                    for f in s.get("filters", [])
-                                    if f["filterType"] == "MIN_NOTIONAL"
-                                ),
-                                "5",
-                            )
-                        ),
-                        "max_qty": float(
-                            next(
-                                (
-                                    f["maxQty"]
-                                    for f in s.get("filters", [])
-                                    if f["filterType"] == "LOT_SIZE"
-                                ),
-                                "9999999999",
-                            )
-                        ),
+                        # PRICE_FILTER
+                        "tick_size": float(price_filter.get("tickSize", "0.01")),
+                        # MIN_NOTIONAL
+                        "min_notional": float(notional_filter.get("notional", "5")),
                     }
 
             raise BinanceAPIError(f"Symbol {symbol} not found in exchange info")

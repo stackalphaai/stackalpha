@@ -1,4 +1,5 @@
 import logging
+import math
 from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,17 +79,41 @@ class BinanceTradeExecutor:
             market_data = await self.info_service.get_market_data(binance_symbol)
             current_price = market_data.get("mark_price", float(signal.entry_price))
 
-            # Calculate base quantity from full margin
-            max_qty = precision.get("max_qty", 0)
+            # Extract Binance order filters
+            step_size = precision.get("step_size", 10 ** -precision["quantity_precision"])
+            min_qty = precision.get("min_qty", 0)
+            # MARKET_LOT_SIZE has a stricter maxQty than LOT_SIZE for market orders
+            market_max_qty = precision.get("market_max_qty", precision.get("max_qty", 0))
+            min_notional = precision.get("min_notional", 5.0)
+
+            def _floor_to_step(value: float, step: float) -> float:
+                """Floor a value to the nearest step increment (Binance filter compliance)."""
+                if step <= 0:
+                    return value
+                return math.floor(value / step) * step
 
             def _calc_qty(margin: float) -> tuple[float, float]:
                 notional = margin * leverage_val
                 raw = notional / current_price
-                if max_qty > 0:
-                    raw = min(raw, max_qty)
-                return round(raw, precision["quantity_precision"]), notional
+                if market_max_qty > 0:
+                    raw = min(raw, market_max_qty)
+                # Floor to step_size — Binance rejects quantities that don't align
+                qty = _floor_to_step(raw, step_size)
+                return qty, qty * current_price
 
             position_size, notional_usd = _calc_qty(position_size_usd)
+
+            # Validate against MIN_NOTIONAL and min_qty before placing order
+            if position_size < min_qty:
+                raise BadRequestError(
+                    f"Calculated quantity {position_size} below Binance minimum {min_qty} "
+                    f"for {binance_symbol}"
+                )
+            if notional_usd < min_notional:
+                raise BadRequestError(
+                    f"Notional ${notional_usd:.2f} below Binance minimum ${min_notional} "
+                    f"for {binance_symbol}"
+                )
 
             # Create trade record
             trade = Trade(
@@ -109,11 +134,18 @@ class BinanceTradeExecutor:
             self.db.add(trade)
             await self.db.flush()
 
-            # Try opening with full margin, then ½, then ¼ on -4005
+            # Try opening with full margin, then ½, then ¼ on -4005 (insufficient margin)
             open_error: Exception | None = None
             for margin_factor in [1.0, 0.5, 0.25]:
                 adjusted_margin = position_size_usd * margin_factor
                 adj_qty, adj_notional = _calc_qty(adjusted_margin)
+                # Validate filters at each retry level
+                if adj_qty < min_qty or adj_notional < min_notional:
+                    logger.warning(
+                        f"Skipping {int(margin_factor * 100)}% retry: qty={adj_qty} < "
+                        f"min_qty={min_qty} or notional=${adj_notional:.2f} < ${min_notional}"
+                    )
+                    continue
                 trade.position_size = adj_qty
                 trade.position_size_usd = adj_notional
                 trade.margin_used = adjusted_margin
@@ -299,7 +331,16 @@ class BinanceTradeExecutor:
 
         # Step 4: Place TP algo order
         close_side = "SELL" if trade.direction == TradeDirection.LONG else "BUY"
-        tp_price = round(float(trade.take_profit_price), precision["price_precision"])
+        tick_size = precision.get("tick_size", 10 ** -precision["price_precision"])
+
+        def _round_price(price: float) -> float:
+            """Round price to tick_size (Binance PRICE_FILTER compliance)."""
+            if tick_size <= 0:
+                return round(price, precision["price_precision"])
+            # Round to nearest tick (not floor — prices can go either way)
+            return round(round(price / tick_size) * tick_size, precision["price_precision"])
+
+        tp_price = _round_price(float(trade.take_profit_price))
 
         try:
             tp_result = await binance_exchange.place_tp_algo_order(
@@ -314,7 +355,7 @@ class BinanceTradeExecutor:
             logger.error(f"Failed to place TP order for {binance_symbol}: {e}")
 
         # Step 5: Place SL algo order
-        sl_price = round(float(trade.stop_loss_price), precision["price_precision"])
+        sl_price = _round_price(float(trade.stop_loss_price))
 
         try:
             sl_result = await binance_exchange.place_sl_algo_order(
