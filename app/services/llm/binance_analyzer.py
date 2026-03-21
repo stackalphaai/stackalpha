@@ -247,10 +247,17 @@ Provide your analysis and trading recommendation in JSON format."""
             analysis["model"] = model
             analysis["symbol"] = symbol
 
+            logger.info(
+                f"[{model}] {symbol}: direction={analysis.get('direction')}, "
+                f"confidence={analysis.get('confidence')}"
+            )
             return analysis
 
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse LLM response as JSON: {e}")
+            logger.error(
+                f"Failed to parse LLM response as JSON: {e}\n"
+                f"Raw response (first 300 chars): {response[:300]}"
+            )
             return {
                 "model": model,
                 "symbol": symbol,
