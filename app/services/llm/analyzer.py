@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import Any
 
 import pandas as pd
@@ -211,8 +212,17 @@ Provide your analysis and trading recommendation in JSON format."""
                 response = response[3:]
             if response.endswith("```"):
                 response = response[:-3]
+            response = response.strip()
 
-            analysis = json.loads(response)
+            try:
+                analysis = json.loads(response)
+            except json.JSONDecodeError:
+                match = re.search(r"\{[\s\S]*\}", response)
+                if not match:
+                    raise
+                cleaned = match.group()
+                cleaned = re.sub(r",\s*([}\]])", r"\1", cleaned)
+                analysis = json.loads(cleaned)
             analysis["model"] = model
             analysis["symbol"] = symbol
 

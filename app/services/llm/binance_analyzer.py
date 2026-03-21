@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import Any
 
 import pandas as pd
@@ -221,14 +222,28 @@ Provide your analysis and trading recommendation in JSON format."""
             )
 
             response = response.strip()
+            # Strip markdown code fences
             if response.startswith("```json"):
                 response = response[7:]
             if response.startswith("```"):
                 response = response[3:]
             if response.endswith("```"):
                 response = response[:-3]
+            response = response.strip()
 
-            analysis = json.loads(response)
+            # Try parsing directly first
+            try:
+                analysis = json.loads(response)
+            except json.JSONDecodeError:
+                # Fallback: extract first JSON object from response (handles
+                # preamble text, trailing commas, comments that some models add)
+                match = re.search(r"\{[\s\S]*\}", response)
+                if not match:
+                    raise
+                cleaned = match.group()
+                # Remove trailing commas before } or ] (common Gemini quirk)
+                cleaned = re.sub(r",\s*([}\]])", r"\1", cleaned)
+                analysis = json.loads(cleaned)
             analysis["model"] = model
             analysis["symbol"] = symbol
 
