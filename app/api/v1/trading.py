@@ -352,3 +352,26 @@ async def get_signal_stats(
     signal_service = SignalService(db)
     stats = await signal_service.get_signal_stats()
     return stats
+
+
+@router.get("/candles/{symbol}")
+async def get_candles(
+    symbol: str,
+    current_user: CurrentUser,
+    exchange: str = "binance",
+    interval: str = "15m",
+    limit: int = 100,
+):
+    """Get candlestick data for a symbol. Used for signal detail charting."""
+    if exchange == "binance":
+        from app.services.binance import get_binance_info_service
+        from app.services.binance.utils import to_binance_symbol
+
+        info = get_binance_info_service()
+        binance_symbol = to_binance_symbol(symbol)
+        candles = await info.get_klines(binance_symbol, interval, limit)
+    else:
+        info = get_info_service()
+        candles = await info.get_klines(symbol, interval, limit)
+
+    return {"candles": candles, "symbol": symbol, "interval": interval}
