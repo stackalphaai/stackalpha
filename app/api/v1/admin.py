@@ -447,6 +447,113 @@ async def check_system_health(current_user: AdminUser, db: DB):
 
 
 # ============================================================================
+# Admin Analytics (system-wide, all users)
+# ============================================================================
+
+
+@router.get("/analytics/trades")
+async def get_admin_trade_analytics(
+    current_user: AdminUser,
+    db: DB,
+    period: str = "30d",
+) -> dict[str, Any]:
+    """System-wide trade analytics for the admin dashboard."""
+    from datetime import timedelta
+
+    days = {"7d": 7, "30d": 30, "90d": 90, "all": 3650}.get(period, 30)
+    since = datetime.now(UTC) - timedelta(days=days)
+
+    closed_filter = [Trade.status == TradeStatus.CLOSED, Trade.closed_at >= since]
+
+    total_trades = await db.scalar(select(func.count(Trade.id)).where(*closed_filter)) or 0
+    winning = (
+        await db.scalar(select(func.count(Trade.id)).where(*closed_filter, Trade.realized_pnl > 0))
+        or 0
+    )
+    losing = (
+        await db.scalar(select(func.count(Trade.id)).where(*closed_filter, Trade.realized_pnl < 0))
+        or 0
+    )
+    total_pnl = await db.scalar(select(func.sum(Trade.realized_pnl)).where(*closed_filter)) or 0
+    best = await db.scalar(select(func.max(Trade.realized_pnl)).where(*closed_filter)) or 0
+    worst = await db.scalar(select(func.min(Trade.realized_pnl)).where(*closed_filter)) or 0
+
+    return {
+        "period": period,
+        "total_trades": total_trades,
+        "winning_trades": winning,
+        "losing_trades": losing,
+        "win_rate": (winning / total_trades * 100) if total_trades > 0 else 0,
+        "total_pnl": float(total_pnl),
+        "average_pnl": float(total_pnl) / total_trades if total_trades > 0 else 0,
+        "best_trade": float(best),
+        "worst_trade": float(worst),
+    }
+
+
+@router.get("/analytics/daily-pnl")
+async def get_admin_daily_pnl(
+    current_user: AdminUser,
+    db: DB,
+    days: int = 30,
+) -> list[dict[str, Any]]:
+    """System-wide daily P&L for charting."""
+    from datetime import timedelta
+
+    from sqlalchemy import Date, cast
+
+    since = datetime.now(UTC) - timedelta(days=days)
+
+    results = await db.execute(
+        select(
+            cast(Trade.closed_at, Date).label("date"),
+            func.sum(Trade.realized_pnl).label("pnl"),
+            func.count(Trade.id).label("trade_count"),
+        )
+        .where(Trade.status == TradeStatus.CLOSED, Trade.closed_at >= since)
+        .group_by(cast(Trade.closed_at, Date))
+        .order_by(cast(Trade.closed_at, Date))
+    )
+
+    return [
+        {"date": str(row.date), "pnl": float(row.pnl or 0), "trade_count": row.trade_count}
+        for row in results.all()
+    ]
+
+
+@router.get("/analytics/performance-by-symbol")
+async def get_admin_symbol_performance(
+    current_user: AdminUser,
+    db: DB,
+) -> list[dict[str, Any]]:
+    """System-wide performance breakdown by symbol."""
+    results = await db.execute(
+        select(
+            Trade.symbol,
+            func.count(Trade.id).label("total_trades"),
+            func.sum(func.case((Trade.realized_pnl > 0, 1), else_=0)).label("winning_trades"),
+            func.sum(Trade.realized_pnl).label("total_pnl"),
+        )
+        .where(Trade.status == TradeStatus.CLOSED)
+        .group_by(Trade.symbol)
+        .order_by(func.sum(Trade.realized_pnl).desc())
+        .limit(15)
+    )
+
+    rows = results.all()
+    return [
+        {
+            "symbol": r.symbol,
+            "total_trades": r.total_trades,
+            "winning_trades": r.winning_trades,
+            "total_pnl": float(r.total_pnl or 0),
+            "win_rate": (r.winning_trades / r.total_trades * 100) if r.total_trades > 0 else 0,
+        }
+        for r in rows
+    ]
+
+
+# ============================================================================
 # Runtime Configuration
 # ============================================================================
 
