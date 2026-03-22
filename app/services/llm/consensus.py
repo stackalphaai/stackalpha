@@ -11,20 +11,30 @@ logger = logging.getLogger(__name__)
 
 
 class ConsensusEngine:
-    def __init__(self, analyzer=None, info_service=None):
+    def __init__(self, analyzer=None, info_service=None, use_mtf_filter: bool = False):
         self.analyzer = analyzer or get_market_analyzer()
         self.info_service = info_service or get_info_service()
         self.models = settings.llm_models
         self.threshold = settings.llm_consensus_threshold
+        self.use_mtf_filter = use_mtf_filter
 
     async def generate_signal(self, symbol: str) -> dict[str, Any] | None:
+        """Generate a trading signal. Routes through MTF pre-filter for Binance."""
+        if self.use_mtf_filter:
+            return await self._generate_signal_mtf(symbol)
+        return await self._generate_signal_standard(symbol)
+
+    # ------------------------------------------------------------------
+    # Standard path (Hyperliquid and fallback)
+    # ------------------------------------------------------------------
+
+    async def _generate_signal_standard(self, symbol: str) -> dict[str, Any] | None:
         try:
             indicators = await self.analyzer.get_technical_indicators(symbol)
             if not indicators:
                 logger.warning(f"No technical indicators available for {symbol}")
                 return None
 
-            # Pre-filter: skip symbols with degenerate/flat indicators
             if not self._indicators_are_valid(symbol, indicators):
                 return None
 
@@ -33,62 +43,187 @@ class ConsensusEngine:
                 logger.warning(f"No market data available for {symbol}")
                 return None
 
-            tasks = [
-                self.analyzer.analyze_market(symbol, model, indicators, market_data)
-                for model in self.models
-            ]
-
-            analyses = await asyncio.gather(*tasks, return_exceptions=True)
-
-            valid_analyses = []
-            failed_models = []
-            neutral_models = []
-            for i, analysis in enumerate(analyses):
-                model_name = self.models[i] if i < len(self.models) else f"model-{i}"
-                if isinstance(analysis, Exception):
-                    logger.error(f"LLM analysis failed for {symbol} with {model_name}: {analysis}")
-                    failed_models.append(model_name)
-                    continue
-                if analysis.get("error"):
-                    logger.warning(
-                        f"LLM returned error for {symbol} with {model_name}: {analysis.get('error')}"
-                    )
-                    failed_models.append(model_name)
-                    continue
-                if analysis.get("direction") == "neutral":
-                    neutral_models.append(model_name)
-                    continue
-                valid_analyses.append(analysis)
-
-            if failed_models:
-                logger.warning(
-                    f"Models failed for {symbol}: {', '.join(failed_models)} "
-                    f"({len(failed_models)}/{len(self.models)})"
-                )
-            if neutral_models:
-                logger.info(f"Models returned neutral for {symbol}: {', '.join(neutral_models)}")
-
-            if not valid_analyses:
-                logger.info(
-                    f"No valid analyses for {symbol} — "
-                    f"{len(failed_models)} failed, {len(neutral_models)} neutral"
-                )
-                return None
-
-            min_models = settings.llm_min_agreeing_models
-            if len(valid_analyses) < min_models:
-                logger.info(
-                    f"Insufficient model agreement for {symbol}: "
-                    f"only {len(valid_analyses)} valid vote(s), need at least {min_models}"
-                )
-                return None
-
-            signal = self._build_consensus(symbol, valid_analyses, market_data, indicators)
-            return signal
+            return await self._dispatch_and_build_consensus(symbol, indicators, market_data)
 
         except Exception as e:
             logger.error(f"Error generating signal for {symbol}: {e}")
             return None
+
+    # ------------------------------------------------------------------
+    # MTF path (Binance 4-timeframe entry system)
+    # ------------------------------------------------------------------
+
+    async def _generate_signal_mtf(self, symbol: str) -> dict[str, Any] | None:
+        """Binance-specific: 4-timeframe pre-filter → LLM consensus."""
+        try:
+            # Step 1: Run multi-timeframe alignment check (saves LLM costs)
+            mtf_result = await self.analyzer.get_multi_timeframe_analysis(symbol)
+            if mtf_result is None:
+                return None
+
+            # Step 2: Fetch standard 4h indicators for LLM consumption
+            indicators = await self.analyzer.get_technical_indicators(symbol)
+            if not indicators:
+                return None
+
+            # Basic validity checks (ATR, RSI, price)
+            if not self._indicators_are_valid(symbol, indicators):
+                return None
+
+            # Inject MTF context so LLMs see the pre-filter results
+            indicators["mtf_bias"] = mtf_result["bias"]
+            indicators["mtf_stop_loss"] = mtf_result["stop_loss"]
+            indicators["mtf_tp_zones"] = mtf_result["tp_zones"]
+            indicators["mtf_trigger_pattern"] = mtf_result["trigger_pattern"]
+            indicators["mtf_structure_level"] = mtf_result["structure_level"]
+
+            market_data = await self.info_service.get_market_data(symbol)
+            if not market_data:
+                return None
+
+            # Step 3: LLM consensus (shared logic)
+            signal = await self._dispatch_and_build_consensus(symbol, indicators, market_data)
+
+            # Step 4: Override SL/TP with MTF-computed values if signal was generated
+            if signal and mtf_result:
+                signal = self._apply_mtf_overrides(signal, mtf_result, indicators)
+
+            return signal
+
+        except Exception as e:
+            logger.error(f"Error generating MTF signal for {symbol}: {e}")
+            return None
+
+    def _apply_mtf_overrides(
+        self,
+        signal: dict[str, Any],
+        mtf_result: dict[str, Any],
+        indicators: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Override LLM-suggested SL/TP with structure-based MTF values."""
+        entry_price = signal["entry_price"]
+        bias = mtf_result["bias"]
+
+        # SL: use the structure-based SL from 15m + 5m ATR
+        signal["stop_loss_price"] = mtf_result["stop_loss"]
+
+        # TP: pick the nearest 1h zone that gives at least min_rr R:R
+        min_rr = settings.llm_min_risk_reward_ratio
+        risk = abs(entry_price - mtf_result["stop_loss"])
+
+        if risk > 0 and mtf_result["tp_zones"]:
+            best_tp = None
+            for zone in mtf_result["tp_zones"]:
+                if bias == "BUY" and zone > entry_price:
+                    reward = zone - entry_price
+                    if reward / risk >= min_rr:
+                        best_tp = zone
+                        break
+                elif bias == "SELL" and zone < entry_price:
+                    reward = entry_price - zone
+                    if reward / risk >= min_rr:
+                        best_tp = zone
+                        break
+
+            if best_tp:
+                signal["take_profit_price"] = best_tp
+                rr = abs(best_tp - entry_price) / risk
+                logger.info(
+                    f"MTF override: {signal['symbol']} TP={best_tp:.6f} SL={mtf_result['stop_loss']:.6f} "
+                    f"R:R={rr:.2f}:1"
+                )
+            else:
+                # No 1h zone gives good R:R — fall back to clamped LLM TP
+                logger.info(
+                    f"MTF: No 1h TP zone with R:R >= {min_rr}:1 for {signal['symbol']}, "
+                    f"using LLM TP"
+                )
+        else:
+            logger.info(f"MTF: No TP zones available for {signal['symbol']}, using LLM TP")
+
+        # Re-validate final R:R
+        tp = signal["take_profit_price"]
+        sl = signal["stop_loss_price"]
+        if bias == "BUY":
+            reward = tp - entry_price
+            risk_final = entry_price - sl
+        else:
+            reward = entry_price - tp
+            risk_final = sl - entry_price
+
+        if risk_final <= 0 or reward / risk_final < min_rr:
+            logger.info(
+                f"MTF: Final R:R check failed for {signal['symbol']}: "
+                f"R:R={reward / risk_final:.2f}:1 (need >= {min_rr}:1)"
+            )
+            return None
+
+        return signal
+
+    # ------------------------------------------------------------------
+    # Shared: LLM dispatch + consensus building
+    # ------------------------------------------------------------------
+
+    async def _dispatch_and_build_consensus(
+        self, symbol: str, indicators: dict[str, Any], market_data: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Dispatch to LLM models in parallel and build consensus."""
+        tasks = [
+            self.analyzer.analyze_market(symbol, model, indicators, market_data)
+            for model in self.models
+        ]
+
+        analyses = await asyncio.gather(*tasks, return_exceptions=True)
+
+        valid_analyses = []
+        failed_models = []
+        neutral_models = []
+        for i, analysis in enumerate(analyses):
+            model_name = self.models[i] if i < len(self.models) else f"model-{i}"
+            if isinstance(analysis, Exception):
+                logger.error(f"LLM analysis failed for {symbol} with {model_name}: {analysis}")
+                failed_models.append(model_name)
+                continue
+            if analysis.get("error"):
+                logger.warning(
+                    f"LLM returned error for {symbol} with {model_name}: {analysis.get('error')}"
+                )
+                failed_models.append(model_name)
+                continue
+            if analysis.get("direction") == "neutral":
+                neutral_models.append(model_name)
+                continue
+            valid_analyses.append(analysis)
+
+        if failed_models:
+            logger.warning(
+                f"Models failed for {symbol}: {', '.join(failed_models)} "
+                f"({len(failed_models)}/{len(self.models)})"
+            )
+        if neutral_models:
+            logger.info(f"Models returned neutral for {symbol}: {', '.join(neutral_models)}")
+
+        if not valid_analyses:
+            logger.info(
+                f"No valid analyses for {symbol} — "
+                f"{len(failed_models)} failed, {len(neutral_models)} neutral"
+            )
+            return None
+
+        min_models = settings.llm_min_agreeing_models
+        if len(valid_analyses) < min_models:
+            logger.info(
+                f"Insufficient model agreement for {symbol}: "
+                f"only {len(valid_analyses)} valid vote(s), need at least {min_models}"
+            )
+            return None
+
+        signal = self._build_consensus(symbol, valid_analyses, market_data, indicators)
+        return signal
+
+    # ------------------------------------------------------------------
+    # Indicator validation
+    # ------------------------------------------------------------------
 
     def _indicators_are_valid(self, symbol: str, indicators: dict[str, Any]) -> bool:
         """Reject symbols with degenerate indicators (newly listed, flat price action)."""
@@ -97,24 +232,19 @@ class ConsensusEngine:
         adx = indicators.get("adx", 0)
         current_price = indicators.get("current_price", 0)
 
-        # RSI near 0 means coin is essentially dead / delisted — skip.
-        # RSI >= 99 (extreme overbought) is NOT skipped — it is a strong short signal.
         if rsi <= 1:
             logger.info(f"Skipping {symbol}: RSI={rsi:.1f} (dead/delisted coin)")
             return False
 
-        # ATR of 0 means zero volatility — no trade opportunity
         if atr <= 0 or current_price <= 0:
             logger.info(f"Skipping {symbol}: zero ATR or price")
             return False
 
-        # ADX below threshold = no clear trend — avoid choppy markets
         min_adx = settings.llm_min_adx
         if adx < min_adx:
             logger.info(f"Skipping {symbol}: weak trend ADX={adx:.1f} (need >= {min_adx})")
             return False
 
-        # ATR/price ratio too low = no meaningful volatility for leveraged trading
         min_atr_ratio = settings.llm_min_atr_ratio
         atr_ratio = atr / current_price
         if atr_ratio < min_atr_ratio:
@@ -125,6 +255,10 @@ class ConsensusEngine:
             return False
 
         return True
+
+    # ------------------------------------------------------------------
+    # Consensus building
+    # ------------------------------------------------------------------
 
     def _build_consensus(
         self,
@@ -264,48 +398,27 @@ class ConsensusEngine:
 
         return signal_data
 
-    def _calculate_tp(
-        self,
-        entry_price: float,
-        direction: str,
-        atr: float,
-    ) -> float:
+    # ------------------------------------------------------------------
+    # TP / SL helpers
+    # ------------------------------------------------------------------
+
+    def _calculate_tp(self, entry_price: float, direction: str, atr: float) -> float:
         atr_based = atr * 1.5
         max_tp_distance = entry_price * settings.llm_tp_max_pct
         min_tp_distance = entry_price * settings.llm_tp_min_pct
         tp_distance = max(min_tp_distance, min(atr_based, max_tp_distance))
+        return entry_price + tp_distance if direction == "long" else entry_price - tp_distance
 
-        if direction == "long":
-            return entry_price + tp_distance
-        else:
-            return entry_price - tp_distance
-
-    def _calculate_sl(
-        self,
-        entry_price: float,
-        direction: str,
-        atr: float,
-    ) -> float:
+    def _calculate_sl(self, entry_price: float, direction: str, atr: float) -> float:
         atr_based = atr * 1.0
         max_sl_distance = entry_price * settings.llm_sl_max_pct
         min_sl_distance = entry_price * settings.llm_sl_min_pct
         sl_distance = max(min_sl_distance, min(atr_based, max_sl_distance))
+        return entry_price - sl_distance if direction == "long" else entry_price + sl_distance
 
-        if direction == "long":
-            return entry_price - sl_distance
-        else:
-            return entry_price + sl_distance
-
-    def _clamp_tp(
-        self,
-        entry_price: float,
-        tp_price: float,
-        direction: str,
-    ) -> float:
-        """Clamp TP within configured percentage range from entry."""
+    def _clamp_tp(self, entry_price: float, tp_price: float, direction: str) -> float:
         max_tp_pct = settings.llm_tp_max_pct
         min_tp_pct = settings.llm_tp_min_pct
-
         if direction == "long":
             tp_pct = (tp_price - entry_price) / entry_price if entry_price else 0
             if tp_pct > max_tp_pct:
@@ -320,16 +433,9 @@ class ConsensusEngine:
                 return entry_price * (1 - min_tp_pct)
         return tp_price
 
-    def _clamp_sl(
-        self,
-        entry_price: float,
-        sl_price: float,
-        direction: str,
-    ) -> float:
-        """Clamp SL within configured percentage range from entry."""
+    def _clamp_sl(self, entry_price: float, sl_price: float, direction: str) -> float:
         max_sl_pct = settings.llm_sl_max_pct
         min_sl_pct = settings.llm_sl_min_pct
-
         if direction == "long":
             sl_pct = (entry_price - sl_price) / entry_price if entry_price else 0
             if sl_pct > max_sl_pct:
@@ -344,21 +450,14 @@ class ConsensusEngine:
                 return entry_price * (1 + min_sl_pct)
         return sl_price
 
-    def _calculate_position_size(
-        self,
-        confidence: float,
-        volatility_ratio: float,
-    ) -> float:
-        base_size = 10.0  # Suggested %, user's margin_per_trade_percent overrides
-
+    def _calculate_position_size(self, confidence: float, volatility_ratio: float) -> float:
+        base_size = 10.0
         confidence_factor = 0.5 + (confidence * 0.5)
-
         volatility_factor = 1.0
         if volatility_ratio > 0.05:
             volatility_factor = 0.5
         elif volatility_ratio > 0.03:
             volatility_factor = 0.75
-
         position_size = base_size * confidence_factor * volatility_factor
         return round(max(1.0, min(position_size, base_size)), 2)
 
@@ -385,5 +484,6 @@ def get_binance_consensus_engine() -> ConsensusEngine:
         _binance_consensus_engine_instance = ConsensusEngine(
             analyzer=get_binance_market_analyzer(),
             info_service=get_binance_info_service(),
+            use_mtf_filter=True,
         )
     return _binance_consensus_engine_instance
