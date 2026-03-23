@@ -22,6 +22,19 @@ router = APIRouter(prefix="/exchanges", tags=["Exchanges"])
 DB = Annotated[AsyncSession, Depends(get_db)]
 
 
+@router.get("/setup-info")
+async def get_exchange_setup_info(current_user: CurrentUser):
+    """Get info needed to set up a Binance API key (server IP for whitelisting)."""
+    from app.config import settings
+
+    return {
+        "server_ip": getattr(settings, "server_public_ip", ""),
+        "permissions_required": ["Enable Futures", "Enable Spot & Margin Trading"],
+        "permissions_forbidden": ["Enable Withdrawals"],
+        "ip_restriction_recommended": True,
+    }
+
+
 @router.get("", response_model=list[ExchangeConnectionResponse])
 async def get_exchanges(
     current_user: CurrentUser,
@@ -145,16 +158,3 @@ async def disconnect_exchange(
     await service.disconnect_exchange(connection)
     await db.commit()
     return SuccessResponse(message="Exchange disconnected successfully")
-
-
-@router.get("/setup-info")
-async def get_exchange_setup_info(current_user: CurrentUser):
-    """Get info needed to set up a Binance API key (server IP for whitelisting)."""
-    from app.config import settings
-
-    return {
-        "server_ip": getattr(settings, "server_public_ip", ""),
-        "permissions_required": ["Enable Futures", "Enable Spot & Margin Trading"],
-        "permissions_forbidden": ["Enable Withdrawals"],
-        "ip_restriction_recommended": True,
-    }

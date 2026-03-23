@@ -153,8 +153,31 @@ class ExchangeConnectionService:
         try:
             await exchange.get_account_info()
         except Exception as e:
-            raise BadRequestError(
-                f"Invalid Binance API credentials: {e}. Please check your API key and secret."
-            ) from e
+            error_str = str(e)
+            if "-2015" in error_str:
+                raise BadRequestError(
+                    "Binance rejected the API key. This usually means: "
+                    "(1) IP restriction is enabled on your API key but StackAlpha's "
+                    "server IP is not whitelisted — go to Binance API Management, "
+                    "edit your key, and add the server IP shown in setup instructions, OR "
+                    "(2) Futures trading permission is not enabled on the key, OR "
+                    "(3) The API key or secret is incorrect. "
+                    "Please check and try again."
+                ) from e
+            elif "-2014" in error_str or "API-key format invalid" in error_str:
+                raise BadRequestError(
+                    "Invalid API key format. Please double-check you copied "
+                    "the full API key from Binance."
+                ) from e
+            elif "-1022" in error_str or "Signature" in error_str:
+                raise BadRequestError(
+                    "Invalid API secret. The key looks valid but the secret "
+                    "doesn't match. Please re-copy your API secret from Binance."
+                ) from e
+            else:
+                raise BadRequestError(
+                    f"Failed to connect to Binance: {e}. "
+                    "Please check your API credentials and try again."
+                ) from e
         finally:
             await exchange.close()
