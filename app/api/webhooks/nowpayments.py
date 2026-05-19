@@ -32,25 +32,27 @@ async def nowpayments_ipn(
         f"invoice_id={payload.invoice_id}, actually_paid={payload.actually_paid}"
     )
 
+    raw_body = await request.body()
     payment_service = PaymentService(db)
-    payment = await payment_service.process_webhook(
+    process_result = await payment_service.process_webhook(
         payload=payload,
         signature=x_nowpayments_sig or "",
+        raw_body=raw_body,
     )
     await db.commit()
 
-    if payload.payment_status == "finished":
+    if process_result.subscription_activated:
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
 
         from app.models import Subscription
 
-        result = await db.execute(
+        subscription_result = await db.execute(
             select(Subscription)
             .options(selectinload(Subscription.user))
-            .where(Subscription.id == payment.subscription_id)
+            .where(Subscription.id == process_result.payment.subscription_id)
         )
-        subscription = result.scalar_one_or_none()
+        subscription = subscription_result.scalar_one_or_none()
 
         if subscription and subscription.user:
             email_service = get_email_service()

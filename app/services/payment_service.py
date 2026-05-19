@@ -1,6 +1,8 @@
 import hashlib
 import hmac
+import json
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -21,6 +23,13 @@ from app.models import (
 from app.schemas.subscription import NOWPaymentsIPNPayload
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class WebhookProcessResult:
+    payment: Payment
+    status_changed: bool
+    subscription_activated: bool
 
 
 class PaymentService:
@@ -135,8 +144,9 @@ class PaymentService:
         self,
         payload: NOWPaymentsIPNPayload,
         signature: str,
-    ) -> Payment:
-        if not self._verify_signature(payload.model_dump(), signature):
+        raw_body: bytes | None = None,
+    ) -> WebhookProcessResult:
+        if not self._verify_signature(raw_body or payload.model_dump(), signature):
             raise WebhookValidationError("Invalid IPN signature")
 
         # Try to find payment by payment_id first, then by order_id
@@ -155,6 +165,15 @@ class PaymentService:
             if payment:
                 payment.nowpayments_id = str(payload.payment_id)
 
+        # Some invoice IPNs include invoice_id separately from payment_id.
+        if not payment and payload.invoice_id:
+            result = await self.db.execute(
+                select(Payment).where(Payment.nowpayments_id == str(payload.invoice_id))
+            )
+            payment = result.scalar_one_or_none()
+            if payment:
+                payment.nowpayments_id = str(payload.payment_id)
+
         if not payment:
             logger.warning(
                 f"Payment not found: payment_id={payload.payment_id}, order_id={payload.order_id}"
@@ -162,19 +181,41 @@ class PaymentService:
             raise BadRequestError("Payment not found")
 
         old_status = payment.status
-        payment.status = PaymentStatus(payload.payment_status)
+        incoming_status = PaymentStatus(payload.payment_status)
+        status_changed = old_status != incoming_status
+        subscription_activated = False
+
         payment.actually_paid = payload.actually_paid
         payment.payin_hash = payload.payin_hash
 
-        if payment.status == PaymentStatus.FINISHED:
-            payment.paid_at = datetime.now(UTC)
+        if old_status == PaymentStatus.FINISHED and incoming_status == PaymentStatus.FINISHED:
+            logger.info(f"Duplicate finished webhook ignored for payment {payment.id}")
+        elif old_status == PaymentStatus.FINISHED:
+            status_changed = False
+            logger.warning(
+                f"Ignoring post-finished NOWPayments status for payment {payment.id}: "
+                f"{incoming_status}"
+            )
+        else:
+            payment.status = incoming_status
+
+        if incoming_status == PaymentStatus.FINISHED and old_status != PaymentStatus.FINISHED:
+            payment.paid_at = payment.paid_at or datetime.now(UTC)
             await self._activate_subscription(payment)
-        elif payment.status == PaymentStatus.FAILED:
+            subscription_activated = True
+        elif incoming_status == PaymentStatus.FAILED and old_status not in (
+            PaymentStatus.FAILED,
+            PaymentStatus.FINISHED,
+        ):
             await self._handle_failed_payment(payment)
 
         logger.info(f"Payment {payment.id} status updated: {old_status} -> {payment.status}")
 
-        return payment
+        return WebhookProcessResult(
+            payment=payment,
+            status_changed=status_changed,
+            subscription_activated=subscription_activated,
+        )
 
     async def _activate_subscription(self, payment: Payment):
         result = await self.db.execute(
@@ -215,23 +256,56 @@ class PaymentService:
         if subscription and subscription.status == SubscriptionStatus.PENDING:
             subscription.status = SubscriptionStatus.EXPIRED
 
-    def _verify_signature(self, payload: dict[str, Any], signature: str) -> bool:
-        if not self.ipn_secret:
+    def _verify_signature(self, payload: dict[str, Any] | bytes | str, signature: str) -> bool:
+        ipn_secret = self.ipn_secret.strip()
+        received_signature = signature.strip().lower()
+
+        if not ipn_secret:
+            if settings.is_production:
+                logger.error("NOWPayments IPN secret is not configured in production")
+                return False
+            logger.warning("Skipping NOWPayments IPN signature validation without an IPN secret")
             return True
 
-        sorted_payload = dict(sorted(payload.items()))
-        payload_string = ""
-        for _key, value in sorted_payload.items():
-            if value is not None:
-                payload_string += str(value)
+        if not received_signature:
+            logger.warning("NOWPayments IPN webhook missing x-nowpayments-sig header")
+            return False
+
+        try:
+            payload_string = self._canonical_signature_payload(payload)
+        except (json.JSONDecodeError, TypeError, UnicodeDecodeError) as e:
+            logger.warning(f"Could not canonicalize NOWPayments IPN payload: {e}")
+            return False
 
         expected_signature = hmac.new(
-            self.ipn_secret.encode(),
+            ipn_secret.encode(),
             payload_string.encode(),
             hashlib.sha512,
         ).hexdigest()
 
-        return hmac.compare_digest(signature, expected_signature)
+        return hmac.compare_digest(received_signature, expected_signature)
+
+    def _canonical_signature_payload(self, payload: dict[str, Any] | bytes | str) -> str:
+        if isinstance(payload, bytes):
+            payload = payload.decode("utf-8")
+
+        if isinstance(payload, str):
+            payload_data = json.loads(payload)
+        else:
+            payload_data = payload
+
+        return json.dumps(
+            self._sort_for_signature(payload_data),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+
+    def _sort_for_signature(self, value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: self._sort_for_signature(value[key]) for key in sorted(value)}
+        if isinstance(value, list):
+            return [self._sort_for_signature(item) for item in value]
+        return value
 
     async def get_payment_status(self, payment_id: str) -> dict[str, Any]:
         client = await self.get_client()

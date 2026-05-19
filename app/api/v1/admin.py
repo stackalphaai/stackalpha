@@ -1,11 +1,11 @@
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -531,7 +531,7 @@ async def get_admin_symbol_performance(
         select(
             Trade.symbol,
             func.count(Trade.id).label("total_trades"),
-            func.sum(func.case((Trade.realized_pnl > 0, 1), else_=0)).label("winning_trades"),
+            func.sum(case((Trade.realized_pnl > 0, 1), else_=0)).label("winning_trades"),
             func.sum(Trade.realized_pnl).label("total_pnl"),
         )
         .where(Trade.status == TradeStatus.CLOSED)
@@ -1300,11 +1300,11 @@ async def admin_reset_password(
 
         raise NotFoundError("User")
 
-    from app.core.security import create_token
+    from app.core.security import generate_password_reset_token
 
-    reset_token = create_token({"sub": user.id, "type": "password_reset"}, expires_minutes=60)
+    reset_token = generate_password_reset_token(user.email)
     user.password_reset_token = reset_token
-    user.password_reset_expires = datetime.now(UTC)
+    user.password_reset_expires = datetime.now(UTC) + timedelta(hours=1)
     await db.commit()
 
     logger.info(f"Admin {current_user.email} initiated password reset for {user.email}")
